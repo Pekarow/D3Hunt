@@ -1,0 +1,100 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="App.cpp">
+      <Filter>App\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SampleWindow.cpp">
+      <Filter>App\src</Filter>
+    </ClCompile>
+    <ClCompile Include="SimpleCapture.cpp">
+      <Filter>App\src</Filter>
+    </ClCompile>
+    <ClCompile Include="WindowList.cpp">
+      <Filter>App\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ClientSocket.cpp">
+      <Filter>ClientSocket\src</Filter>
+    </ClCompile>
+    <ClCompile Include="DofusDBUtils.cpp">
+      <Filter>ClientSocket\src</Filter>
+    </ClCompile>
+    <ClCompile Include="DofusHuntAnalyzer.cpp">
+      <Filter>Analyzer</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ClientSocket.h">
+      <Filter>ClientSocket</Filter>
+    </ClInclude>
+    <ClInclude Include="App.h">
+      <Filter>App</Filter>
+    </ClInclude>
+    <ClInclude Include="SampleWindow.h">
+      <Filter>App</Filter>
+    </ClInclude>
+    <ClInclude Include="SimpleCapture.h">
+      <Filter>App</Filter>
+    </ClInclude>
+    <ClInclude Include="WindowList.h">
+      <Filter>App</Filter>
+    </ClInclude>
+    <ClInclude Include="DofusDBUtils.h">
+      <Filter>ClientSocket</Filter>
+    </ClInclude>
+    <ClInclude Include="DofusHuntAnalyzer.h">
+      <Filter>Analyzer</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="python-server\DofusDB.py">
+      <Filter>python-server</Filter>
+    </None>
+    <None Include="python-server\server.py">
+      <Filter>python-server</Filter>
+    </None>
+    <None Include="packages.config">
+      <Filter>utils</Filter>
+    </None>
+    <None Include="fra.traineddata">
+      <Filter>utils</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="ClientSocket">
+      <UniqueIdentifier>{26742c2c-3cf7-4a6b-9fd5-d031241434d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="App">
+      <UniqueIdentifier>{39f97cea-7a0f-4d6d-bd11-68e3b9cc348b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="App\src">
+      <UniqueIdentifier>{a89e4bc0-5396-4e9b-b4e7-c49cae4a5dbe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ClientSocket\src">
+      <UniqueIdentifier>{16d30191-0ef9-4042-9d4d-5e54a4558701}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Analyzer">
+      <UniqueIdentifier>{7449266d-d90d-4a3a-8028-0955b7ab0332}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="python-server">
+      <UniqueIdentifier>{bf0f3b83-f3c2-4f15-9405-c4a8e1f009a8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{7eb47436-8b7c-407f-9dbd-f9d051b0ce25}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="app.manifest">
+      <Filter>utils</Filter>
+    </Manifest>
+  </ItemGroup>
+</Project>
