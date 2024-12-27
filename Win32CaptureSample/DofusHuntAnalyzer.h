@@ -16,11 +16,13 @@ public:
 	std::string getLastHint();
 	int getLastHintDirection();
 	bool isHuntFinished();
+	int getLastHintIndex();
 
 	int getHuntStep();
 	int getMaxHuntStep();
 	cv::Rect getLastHintValidationPosition();
 	std::pair<int, int> getStepValidationPosition();
+	bool isPhorreurFound();
 
 
 private:
@@ -31,8 +33,12 @@ private:
 	std::vector<cv::Rect> FindRectInImage(cv::Mat& image, cv::Scalar lower_bound, cv::Scalar upper_bound, std::string text_content="");
 	bool containsText(cv::Mat& image, std::string text);
 private:
+	bool mCurrentPositionFound = false;
+	bool mHuntInfosFound = false;
+	bool mHuntAreaFound=false;
 	cv::Rect mInterfaceRect;
 	int mLastHintDirection = -1;
+	int mLastHintIndex = -1;
 	cv::Rect mLastHintValidationPosition;
 	cv::Rect mHuntArea;
 	cv::Mat& mImage;

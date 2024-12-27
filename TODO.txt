@@ -1,0 +1,13 @@
+
+Recuperer image du jeu - OK
+Traiter les zones de texte (position, position initiale de la chasse, objets a trouver) - OK
+recupereration de la position de l'etape de chasse depuis DofusDB - OK
+Traiter les zones d'interactions (boutons pour valider la chasse, bouton pour valider une etape de la chasse) - OK
+
+
+Traiter les input clavier (/travel dans le chat et double entrer, deplacement case par case dans le cas d'un phorreur)
+Detecter un phorreur (detection par couleur puis par curseur et text affiché) - DofusAnalyzer peut etre avec Z
+Combat - DofusAnalyzer
+
+
+Gerer la boucle evenementielle - Partial OK

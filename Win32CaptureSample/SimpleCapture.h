@@ -1,5 +1,21 @@
 #pragma once
+#include "ClientSocket.h"
+enum class State
+{
+    NoHunt,
+    WaitingToReachHuntPostion,
+    WaitingToReachPhorreurPostion,
+    WaitingToReachHintPostion,
+    StartHunt,
+    SearchPhorreur,
+    Fight,
+    Ended
+};
 
+namespace cv
+{
+    class Mat;
+}
 class SimpleCapture
 {
 public:
@@ -13,6 +29,7 @@ public:
     void Close();
 
 private:
+    cv::Mat getNextFrame(winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender);
     void OnFrameArrived(
         winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
         winrt::Windows::Foundation::IInspectable const& args);
@@ -37,4 +54,8 @@ private:
     winrt::Windows::Graphics::DirectX::DirectXPixelFormat m_pixelFormat;
 
     std::atomic<bool> m_closed = false;
+    State mState = State::NoHunt;
+    std::pair<int, int> mTargetPosition;
+    std::string mPhorreurType;
+    ClientSocket mSocket;
 };
