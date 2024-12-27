@@ -22,12 +22,10 @@
     <ClCompile Include="DofusHuntAnalyzer.cpp">
       <Filter>Analyzer</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
-      <Filter>utils</Filter>
-    </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>utils</Filter>
     </ClCompile>
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ClientSocket.h">
@@ -96,5 +94,8 @@
     <Manifest Include="app.manifest">
       <Filter>utils</Filter>
     </Manifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
   </ItemGroup>
 </Project>
