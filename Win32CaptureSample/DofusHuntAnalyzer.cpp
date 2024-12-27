@@ -127,7 +127,7 @@ namespace
 			cv::Mat thresh;
 			double ret = cv::threshold(sub_area, thresh, 0, 255, THRESH_OTSU | THRESH_BINARY_INV);
 			// recognize text
-			tess->TesseractRect(thresh.data, 1, thresh.step1(), 0, 0, thresh.cols, thresh.rows);
+			tess->TesseractRect(thresh.data, 1, (int)thresh.step1(), 0, 0, thresh.cols, thresh.rows);
 			string t1(tess->GetUTF8Text());
 			if (remove_endl)
 			{
@@ -248,67 +248,112 @@ DofusHuntAnalyzer::DofusHuntAnalyzer(cv::Mat& image) : mImage(image)
 		string whiteList = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-";
 		gTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
 	}
-
-	findCurrentPos();
-	findInterface();
-	initHuntInfos();
-	findHuntArea();
-
 }
 
 bool DofusHuntAnalyzer::interfaceFound()
 {
+	findInterface();
 	return !mInterfaceRect.empty();
 }
 
 std::pair<int, int> DofusHuntAnalyzer::getStartPosition()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mStartPosition;
 }
 
 std::pair<int, int> DofusHuntAnalyzer::getCurrentPosition()
 {
+	if (!mCurrentPositionFound)
+	{
+		findCurrentPos();
+	}
 	return mCurrentPosition;
 }
 
 std::string DofusHuntAnalyzer::getLastHint()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mLastHint;
 }
 
 int DofusHuntAnalyzer::getLastHintDirection()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mLastHintDirection;
 }
 
 bool DofusHuntAnalyzer::isHuntFinished()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mCurrentStep == mMaxStep;
+}
+
+int DofusHuntAnalyzer::getLastHintIndex()
+{
+	return mLastHintIndex;
 }
 
 int DofusHuntAnalyzer::getHuntStep()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mCurrentStep;
 }
 
 int DofusHuntAnalyzer::getMaxHuntStep()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mMaxStep;
 }
 
 Rect DofusHuntAnalyzer::getLastHintValidationPosition()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return mLastHintValidationPosition;
 }
 
 std::pair<int, int> DofusHuntAnalyzer::getStepValidationPosition()
 {
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
 	return std::pair<int, int>();
+}
+
+bool DofusHuntAnalyzer::isPhorreurFound()
+{
+	if (!mHuntAreaFound)
+	{
+		findHuntArea();
+	}
+	return false;
 }
 
 void DofusHuntAnalyzer::initHuntInfos()
 {
-
+	findInterface();
 	Mat _interface(mImage, mInterfaceRect);
 	vector<Rect> rects = FindRectInImage(_interface, HINT_LOWER, HINT_UPPER);
 	// order by y axis, meaning the order will be from top rect to bottom
@@ -318,7 +363,7 @@ void DofusHuntAnalyzer::initHuntInfos()
 	Mat step(_interface, step_rect);
 
 	std::string step_s = getTextFromImage(step, gTesseractAPI);
-	int index = step_s.find("/");
+	int index = (int)step_s.find("/");
 	mCurrentStep = std::stoi(step_s.substr(index - 1, index));
 	mMaxStep = std::stoi(step_s.substr(index + 1, index + 2));
 
@@ -326,17 +371,17 @@ void DofusHuntAnalyzer::initHuntInfos()
 	Rect start_rect = rects[1];
 	Mat start(_interface, start_rect);
 	std::string start_s = getTextFromImage(start, gTesseractAPI);
-	int start_index = start_s.find("[");
-	int end_index = start_s.find("]");
+	int start_index = (int)start_s.find("[");
+	int end_index = (int)start_s.find("]");
 	string pos = start_s.substr(start_index + 1, end_index - start_index - 1);
 
-	int hint_index = pos.find(",");
+	int hint_index = (int)pos.find(",");
 	string pos_x = pos.substr(0, hint_index);
 	string pos_y = pos.substr(hint_index + 1, pos.size() - hint_index);
 	mStartPosition = make_pair(std::stoi(pos_x), std::stoi(pos_y));
 
 	// get hint infos
-	for (int i = rects.size() - 1; i > 1; i--)
+	for (int i = (int)rects.size() - 1; i > 1; i--)
 	{
 		Rect _rect = rects[i];
 		int offset_start = (int)(5 + _rect.width * X_DIRECTION_RATIO);
@@ -357,9 +402,11 @@ void DofusHuntAnalyzer::initHuntInfos()
 			Rect direction_rect(_rect.x, _rect.y, offset_start, _rect.height);
 			Mat direction(_interface, direction_rect);
 			mLastHintDirection = getDirection(direction);
+			mLastHintIndex = i - 2;
 			break;
 		}
 	}
+	mHuntInfosFound = true;
 }
 
 void DofusHuntAnalyzer::findInterface()
@@ -410,7 +457,7 @@ void DofusHuntAnalyzer::findHuntArea()
 		if (area < 10000)
 			continue;
 		Rect r = cv::boundingRect(contour);
-		float ratio = r.width / r.height;
+		float ratio = (float)(r.width / r.height);
 		if (ratio < .7 || ratio > 1.3)
 		{
 			continue;
@@ -421,6 +468,7 @@ void DofusHuntAnalyzer::findHuntArea()
 	Rect inner_rect = findInnerRect(final_contours[0], Point(mImage.cols / 2, mImage.rows / 2));
 	cv::rectangle(mImage, inner_rect, Scalar(100, 255, 255));
 	mHuntArea = inner_rect;
+	mHuntAreaFound = true;
 }
 
 void DofusHuntAnalyzer::findCurrentPos()
@@ -459,15 +507,16 @@ void DofusHuntAnalyzer::findCurrentPos()
 	Mat sub_mat(mImage, top_left);
 	string top_left_s = getTextFromImage(sub_mat, gTesseractAPI, false);
 	cv::rectangle(mImage, top_left, Scalar(100, 100, 255), 1);
-	int ind = top_left_s.find("\n");
+	int ind = (int)top_left_s.find("\n");
 	string sub_pos = top_left_s.substr(ind);
 	trim(sub_pos);
-	int space = sub_pos.find(' ');
+	int space = (int)sub_pos.find(' ');
 	string pos = sub_pos.substr(0, space);
-	int coma = pos.find(',');
+	int coma = (int)pos.find(',');
 	int x_pos = std::stoi(pos.substr(0, coma));
 	int y_pos = std::stoi(pos.substr(coma + 1));
 	mCurrentPosition = { x_pos, y_pos };
+	mCurrentPositionFound = true;
 }
 
 vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, Scalar upper_bound, string text_content)
