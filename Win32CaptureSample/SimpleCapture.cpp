@@ -25,12 +25,19 @@ namespace util
 {
 	using namespace robmikh::common::uwp;
 }
+#define Z 0x00
+#define CTRL 0x00
+#define ARROW_UP 0x00
+#define ARROW_DOWN 0x00
+#define ARROW_LEFT 0x00
+#define ARROW_RIGHT 0x00
 
 SimpleCapture::SimpleCapture(
 	winrt::IDirect3DDevice const& device,
 	winrt::GraphicsCaptureItem const& item,
-	winrt::DirectXPixelFormat pixelFormat)
+	winrt::DirectXPixelFormat pixelFormat, HWND hwnd)
 {
+	mHWND = hwnd;
 	m_item = item;
 	m_device = device;
 	m_pixelFormat = pixelFormat;
@@ -57,8 +64,6 @@ void SimpleCapture::Close()
 	{
 		m_session.Close();
 		m_framePool.Close();
-
-		//m_swapChain = nullptr;
 		m_framePool = nullptr;
 		m_session = nullptr;
 		m_item = nullptr;
@@ -118,7 +123,6 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 {
 	cv::Mat c = getNextFrame(sender);
 
-
 	State previousState = mState;
 	DofusHuntAnalyzer analyzer(c);
 	bool hunt_started = analyzer.interfaceFound();
@@ -130,12 +134,12 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	{
 		RETURN_SET_STATE(State::StartHunt);
 	}
-
-	if (previousState == State::WaitingToReachHuntPostion || 
-		previousState == State::WaitingToReachHintPostion || 
+	// Process travelling to target position ...
+	if (previousState == State::WaitingToReachHuntPostion ||
+		previousState == State::WaitingToReachHintPostion ||
 		previousState == State::WaitingToReachPhorreurPostion)
 	{
-		// Keep waiting...
+		// Target not reached, keep waiting ...
 		if (analyzer.getCurrentPosition() != mTargetPosition)
 		{
 			RETURN_SET_STATE(previousState);
@@ -148,12 +152,14 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		}
 		else if (previousState == State::WaitingToReachHintPostion)
 		{
-			// TODO:Validate hint
+			// Validate hint
+			sendClick(analyzer.getLastHintValidationPosition());
 			RETURN_SET_STATE(State::StartHunt);
 		}
 		else if (previousState == State::WaitingToReachPhorreurPostion)
 		{
-			// TODO: Press on Z to display Phorreur, could be done via signal?
+			// Press on Z to display Phorreur
+			sendCommand(KeyboardState::PUSH, { Z });
 			RETURN_SET_STATE(State::SearchPhorreur);
 		}
 	}
@@ -162,18 +168,21 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		State phorreur_state = State::NoHunt;
 		if (analyzer.isPhorreurFound())
 		{
-			// TODO: Valdate Hint
+			// Validate hint
+			sendClick(analyzer.getLastHintValidationPosition());
 			phorreur_state = State::StartHunt;
 		}
 		else
 		{
 			int direction = analyzer.getLastHintDirection();
-			// TODO: Travel 1 map in direction
+			// Travel 1 map in direction
+			sendCommand(KeyboardState::PUSH_RELEASE, { CTRL, ARROW_UP });
 			// TODO: Make direction a vector
 			// mTargetPosition = analyzer.getCurrentPosition() + direction;
 			phorreur_state = State::WaitingToReachPhorreurPostion;
 		}
 		// TODO: Release Z press, could be done via signal?
+		sendCommand(KeyboardState::RELEASE, { Z });
 		RETURN_SET_STATE(phorreur_state);
 	}
 	if (previousState == State::StartHunt)
@@ -205,8 +214,13 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	}
 
 	std::cout << "not found" << std::endl;
-	//Detect current hunt step
 	cv::imshow("show", c);
+}
 
+void SimpleCapture::sendCommand(KeyboardState action, std::list<int> target)
+{
+}
 
+void SimpleCapture::sendClick(cv::Rect area)
+{
 }

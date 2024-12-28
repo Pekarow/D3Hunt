@@ -59,7 +59,7 @@ winrt::GraphicsCaptureItem App::TryStartCaptureFromWindowHandle(HWND hwnd)
     try
     {
         item = util::CreateCaptureItemForWindow(hwnd);
-        StartCaptureFromItem(item);
+        StartCaptureFromItem(item, hwnd);
     }
     catch (winrt::hresult_error const& error)
     {
@@ -72,9 +72,9 @@ winrt::GraphicsCaptureItem App::TryStartCaptureFromWindowHandle(HWND hwnd)
 }
 
 
-void App::StartCaptureFromItem(winrt::GraphicsCaptureItem item)
+void App::StartCaptureFromItem(winrt::GraphicsCaptureItem item, HWND hwnd)
 {
-    m_capture = std::make_unique<SimpleCapture>(m_device, item, m_pixelFormat);
+    m_capture = std::make_unique<SimpleCapture>(m_device, item, m_pixelFormat, hwnd);
     m_capture->StartCapture();
 }
 

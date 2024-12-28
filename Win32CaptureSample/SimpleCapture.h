@@ -11,10 +11,16 @@ enum class State
     Fight,
     Ended
 };
-
+enum class KeyboardState
+{
+    PUSH,
+    RELEASE,
+    PUSH_RELEASE
+}; 
 namespace cv
 {
     class Mat;
+    class Rect;
 }
 class SimpleCapture
 {
@@ -22,7 +28,8 @@ public:
     SimpleCapture(
         winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device,
         winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
-        winrt::Windows::Graphics::DirectX::DirectXPixelFormat pixelFormat);
+        winrt::Windows::Graphics::DirectX::DirectXPixelFormat pixelFormat,
+        HWND hwnd);
     ~SimpleCapture() { Close(); }
 
     void StartCapture();
@@ -33,7 +40,8 @@ private:
     void OnFrameArrived(
         winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
         winrt::Windows::Foundation::IInspectable const& args);
-
+    void sendCommand(KeyboardState action, std::list<int> commands);
+    void sendClick(cv::Rect area);
     inline void CheckClosed()
     {
         if (m_closed.load() == true)
@@ -58,4 +66,5 @@ private:
     std::pair<int, int> mTargetPosition;
     std::string mPhorreurType;
     ClientSocket mSocket;
+    HWND mHWND;
 };

@@ -12,7 +12,7 @@ public:
     void StopCapture();
 
 private:
-    void StartCaptureFromItem(winrt::Windows::Graphics::Capture::GraphicsCaptureItem item);
+    void StartCaptureFromItem(winrt::Windows::Graphics::Capture::GraphicsCaptureItem item, HWND hwnd);
 
 private:
     winrt::Windows::System::DispatcherQueue m_mainThread{ nullptr };
