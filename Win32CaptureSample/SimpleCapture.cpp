@@ -38,6 +38,7 @@ SimpleCapture::SimpleCapture(
 	winrt::GraphicsCaptureItem const& item,
 	winrt::DirectXPixelFormat pixelFormat, HWND hwnd, ClientSocket * socket)
 {
+	m_lastSize = { -1, -1 };
 	mSocket = socket;
 	mHWND = hwnd;
 	m_item = item;
@@ -215,10 +216,10 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 			RETURN_SET_STATE(State::SearchPhorreur);
 		}
 
-		mSocket.send(DofusDB::DBInfos2json(infos).c_str());
+		mSocket->send(DofusDB::DBInfos2json(infos).c_str());
 		char* out;
 		int size;
-		mSocket.receive(&out, size);
+		mSocket->receive(&out, size);
 		std::string out_s(out);
 		// TODO: Go to pos "out"
 		RETURN_SET_STATE(State::WaitingToReachHintPostion);

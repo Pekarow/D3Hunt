@@ -75,7 +75,7 @@ winrt::GraphicsCaptureItem App::TryStartCaptureFromWindowHandle(HWND hwnd)
 
 void App::StartCaptureFromItem(winrt::GraphicsCaptureItem item, HWND hwnd)
 {
-    m_capture = std::make_unique<SimpleCapture>(m_device, item, m_pixelFormat, hwnd);
+    m_capture = std::make_unique<SimpleCapture>(m_device, item, m_pixelFormat, hwnd, mSocket.get());
     m_capture->StartCapture();
 }
 

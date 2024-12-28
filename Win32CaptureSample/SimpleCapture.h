@@ -1,7 +1,6 @@
 #pragma once
 #include "ClientSocket.h"
 #include <opencv2/opencv.hpp>
-#include <mutex>
 enum class State
 {
     NoHunt,
