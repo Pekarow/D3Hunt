@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "SimpleCapture.h"
-#include <opencv2/opencv.hpp>
 #include "DofusHuntAnalyzer.h"
 #include "DofusDBUtils.h"
 
 #define RETURN_SET_STATE(state)\
 	mState = state; \
 	cv::imshow("show", c); \
+	cv::waitKey(0); \
+	mProcessingFrame = false; \
 	return;
 namespace winrt
 {
@@ -69,7 +70,7 @@ void SimpleCapture::Close()
 		m_item = nullptr;
 	}
 }
-cv::Mat SimpleCapture::getNextFrame(winrt::Direct3D11CaptureFramePool const& sender)
+bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool const& sender)
 {
 	auto newSize = false;
 	auto frame = sender.TryGetNextFrame();
@@ -103,9 +104,8 @@ cv::Mat SimpleCapture::getNextFrame(winrt::Direct3D11CaptureFramePool const& sen
 	m_d3dContext->Map(stagingTexture, 0, D3D11_MAP_READ, 0, &mappedTex);
 	m_d3dContext->Unmap(stagingTexture, 0);
 
-	cv::Mat c = cv::Mat(desc.Height, desc.Width, CV_8UC4, mappedTex.pData, mappedTex.RowPitch);
+	c = cv::Mat(desc.Height, desc.Width, CV_8UC4, mappedTex.pData, mappedTex.RowPitch).clone();
 	stagingTexture->Release();
-
 
 	DXGI_PRESENT_PARAMETERS presentParameters = { 0 };
 
@@ -117,11 +117,21 @@ cv::Mat SimpleCapture::getNextFrame(winrt::Direct3D11CaptureFramePool const& sen
 			2,
 			m_lastSize);
 	}
-	return c;
+	return true;
 }
 void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sender, winrt::IInspectable const&)
 {
-	cv::Mat c = getNextFrame(sender);
+	cv::Mat c;
+	bool ok = getNextFrame(c, sender);
+	if (!ok || c.empty())
+	{
+		return;
+	}
+	if (mProcessingFrame)
+		return;
+	mProcessingFrame = true;
+
+
 
 	State previousState = mState;
 	DofusHuntAnalyzer analyzer(c);
@@ -130,7 +140,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	{
 		RETURN_SET_STATE(State::NoHunt);
 	}
-	else
+	else if (previousState == State::NoHunt)
 	{
 		RETURN_SET_STATE(State::StartHunt);
 	}
@@ -212,9 +222,6 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		// TODO: Go to pos "out"
 		RETURN_SET_STATE(State::WaitingToReachHintPostion);
 	}
-
-	std::cout << "not found" << std::endl;
-	cv::imshow("show", c);
 }
 
 void SimpleCapture::sendCommand(KeyboardState action, std::list<int> target)

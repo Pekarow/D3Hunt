@@ -1,5 +1,7 @@
 #pragma once
 #include "ClientSocket.h"
+#include <opencv2/opencv.hpp>
+#include <mutex>
 enum class State
 {
     NoHunt,
@@ -17,11 +19,7 @@ enum class KeyboardState
     RELEASE,
     PUSH_RELEASE
 }; 
-namespace cv
-{
-    class Mat;
-    class Rect;
-}
+
 class SimpleCapture
 {
 public:
@@ -36,7 +34,7 @@ public:
     void Close();
 
 private:
-    cv::Mat getNextFrame(winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender);
+    bool getNextFrame(cv::Mat& out, winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender);
     void OnFrameArrived(
         winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
         winrt::Windows::Foundation::IInspectable const& args);
@@ -67,4 +65,5 @@ private:
     std::string mPhorreurType;
     ClientSocket mSocket;
     HWND mHWND;
+    std::atomic<bool> mProcessingFrame = false;
 };

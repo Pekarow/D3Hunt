@@ -262,3 +262,4 @@ __pycache__/
 
 Win32CaptureSample/output.png
 /Win32CaptureSample/output.jxr
+/Win32CaptureSample/python-server/venv

@@ -1,42 +1,56 @@
 import socket
+import threading
 from DofusDB import DofusDB
 import json
 from time import sleep
-def server_program():
-    ddb = DofusDB()
-    # get the hostname
-    host = socket.gethostname()
-    port = 5000  # initiate port no above 1024
-    print(host)
-    server_socket = socket.socket()  # get instance
-    # look closely. The bind() function takes tuple as argument
-    server_socket.bind((host, port))  # bind host address and port together
 
-    # configure how many client the server can listen simultaneously
-    server_socket.listen(1000)
-    conn, address = server_socket.accept()  # accept new connection
-    print("Connection from: " + str(address))
+def handle_client(conn, address):
+    print(f"Connection from: {address}")
+    ddb = DofusDB()
     while True:
-        # receive data stream. it won't accept data packet greater than 1024 bytes
-        data = conn.recv(1024).decode()
+        data = conn.recv(1024).decode()  # Receive data stream
+
         if not data:
             sleep(1)
             continue
+
         res = json.loads(data)
         print(res)
-        if "exit" in res and res["exit"]==1:
+
+        if "exit" in res and res["exit"] == 1:
             break
+
         ddb.set_x_position(res["x"])
         ddb.set_y_position(res["y"])
-        print(type(res["direction"]))
         ddb.set_direction(res["direction"])
         ddb.set_hint(res["hint"])
-        print("from connected user: " + str(data))
+
+        print(f"From connected user: {data}")
         new_data = "/".join(ddb.get_hint_position())
-        conn.send(new_data.encode())  # send data to the client
+        conn.send(new_data.encode())  # Send data to the client
 
-    conn.close()  # close the connection
+    conn.close()  # Close the connection
 
+def server_program():
+    host = socket.gethostname()
+    port = 5000  # Port number above 1024
+    print(f"Server hostname: {host}")
+
+    server_socket = socket.socket()  # Create socket instance
+    server_socket.bind((host, port))  # Bind host address and port together
+    server_socket.listen(1000)  # Configure the server to listen for connections
+
+    try:
+        while True:
+            conn, address = server_socket.accept()  # Accept new connection
+            client_thread = threading.Thread(target=handle_client, args=(conn, address))
+            client_thread.start()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    finally:
+        server_socket.close()  # Ensure the server socket is closed properly
 
 if __name__ == '__main__':
     server_program()

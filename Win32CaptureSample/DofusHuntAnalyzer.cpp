@@ -12,10 +12,10 @@ namespace
 	const Scalar INTERFACE_LOWER = Scalar(103, 0, 41);
 	const Scalar INTERFACE_UPPER = Scalar(146, 255, 255);
 
-	const Scalar TITLE_LOWER = Scalar(106, 68, 78);
-	const Scalar TITLE_UPPER = Scalar(148, 86, 83);
-	const Scalar HINT_LOWER = Scalar(106, 68, 11);
-	const Scalar HINT_UPPER = Scalar(148, 86, 64);
+	const Scalar TITLE_LOWER = Scalar(98, 60, 83);
+	const Scalar TITLE_UPPER = Scalar(180, 255, 190);
+	const Scalar HINT_LOWER = Scalar(106, 0, 0);
+	const Scalar HINT_UPPER = Scalar(180, 255, 71);
 	const string TITLE_S = "CHASSE AUX TRESORS";
 
 	const double X_DIRECTION_RATIO = .1;
@@ -177,27 +177,30 @@ namespace
 		Rect bot_right_r(r.x + x_middle, r.y + y_middle, x_middle, y_middle);
 
 
-
-		int top_left = cv::countNonZero(Mat(thresh, top_left_r));
-		int top_right = cv::countNonZero(Mat(thresh, top_right_r));
-		int bot_left = cv::countNonZero(Mat(thresh, bot_left_r));
-		int bot_right = cv::countNonZero(Mat(thresh, bot_right_r));
+		Mat top_left_mat = Mat(thresh, top_left_r);
+		Mat top_right_mat = Mat(thresh, top_right_r);
+		Mat bot_left_mat = Mat(thresh, bot_left_r);
+		Mat bot_right_mat = Mat(thresh, bot_right_r);
+		int top_left = cv::countNonZero(top_left_mat);
+		int top_right = cv::countNonZero(top_right_mat);
+		int bot_left = cv::countNonZero(bot_left_mat);
+		int bot_right = cv::countNonZero(bot_right_mat);
 
 		std::vector<int> values = { top_left, top_right, bot_left, bot_right };
 		std::sort(values.begin(), values.end());
-		if ((values[0] == top_left || values[0] == top_right) && (values[1] == top_left || values[2] == top_right))
+		if ((values[0] == top_left && values[1] == top_right) || (values[1] == top_left && values[0] == top_right))
 		{
 			return 0;
 		}
-		if ((values[0] == top_right || values[0] == bot_right) && (values[1] == top_right || values[2] == bot_right))
+		if ((values[0] == top_right && values[1] == bot_right) || (values[1] == top_right && values[0] == bot_right))
 		{
 			return 1;
 		}
-		if ((values[0] == bot_left || values[0] == bot_right) && (values[1] == bot_left || values[2] == bot_right))
+		if ((values[0] == bot_left && values[1] == bot_right) || (values[1] == bot_left && values[0] == bot_right))
 		{
 			return 2;
 		}
-		if ((values[0] == bot_left || values[0] == top_left) && (values[1] == bot_left || values[2] == top_left))
+		if ((values[0] == bot_left && values[1] == top_left) || (values[1] == bot_left && values[0] == top_left))
 		{
 			return 3;
 		}
@@ -414,12 +417,22 @@ void DofusHuntAnalyzer::findInterface()
 	vector<Rect> rects = FindRectInImage(mImage, INTERFACE_LOWER, INTERFACE_UPPER);
 	for (const Rect& r : rects)
 	{
-		Mat sub(mImage, r);
-		vector<Rect> found = FindRectInImage(sub, TITLE_LOWER, TITLE_UPPER, TITLE_S);
-		if (found.size() == 1)
+		float ratio = (float)(r.width / r.height);
+		if (ratio < .7 || ratio > 1.3)
 		{
-			mInterfaceRect = r;
-			break;
+			continue;
+		}
+		Mat sub(mImage, r);
+		vector<Rect> founds = FindRectInImage(sub, TITLE_LOWER, TITLE_UPPER, TITLE_S);
+		Rect title_rect;
+		for (const auto& found : founds)
+		{
+			if (found.y < 10 && found.x < 10)
+			{
+				mInterfaceRect = r;
+				rectangle(mImage, mInterfaceRect, Scalar(0, 255, 0), 1);
+				return;
+			}
 		}
 	}
 }
@@ -568,7 +581,7 @@ vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, 
 		valid_contours.push_back(bounds);
 		to_draw.push_back(contour);
 	}
-	cv::drawContours(image, to_draw, -1, Scalar(0, 255, 0), 1);
+	//cv::drawContours(image, to_draw, -1, Scalar(0, 255, 0), 1);
 	return valid_contours;
 }
 
