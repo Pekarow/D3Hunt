@@ -36,8 +36,9 @@ namespace util
 SimpleCapture::SimpleCapture(
 	winrt::IDirect3DDevice const& device,
 	winrt::GraphicsCaptureItem const& item,
-	winrt::DirectXPixelFormat pixelFormat, HWND hwnd)
+	winrt::DirectXPixelFormat pixelFormat, HWND hwnd, ClientSocket * socket)
 {
+	mSocket = socket;
 	mHWND = hwnd;
 	m_item = item;
 	m_device = device;

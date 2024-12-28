@@ -27,7 +27,8 @@ public:
         winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device,
         winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
         winrt::Windows::Graphics::DirectX::DirectXPixelFormat pixelFormat,
-        HWND hwnd);
+        HWND hwnd,
+        ClientSocket * socket);
     ~SimpleCapture() { Close(); }
 
     void StartCapture();
@@ -63,7 +64,7 @@ private:
     State mState = State::NoHunt;
     std::pair<int, int> mTargetPosition;
     std::string mPhorreurType;
-    ClientSocket mSocket;
+    ClientSocket * mSocket = nullptr;
     HWND mHWND;
     std::atomic<bool> mProcessingFrame = false;
 };

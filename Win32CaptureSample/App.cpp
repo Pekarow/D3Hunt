@@ -51,6 +51,7 @@ App::App(winrt::ContainerVisual root)
     auto d3dDevice = util::CreateD3D11Device();
     auto dxgiDevice = d3dDevice.as<IDXGIDevice>();
     m_device = CreateDirect3DDevice(dxgiDevice.get());
+    mSocket.reset(new ClientSocket());
 }
 
 winrt::GraphicsCaptureItem App::TryStartCaptureFromWindowHandle(HWND hwnd)

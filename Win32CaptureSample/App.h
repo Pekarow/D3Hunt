@@ -1,6 +1,6 @@
 #pragma once
 #include "SimpleCapture.h"
-
+#include "ClientSocket.h"
 class App
 {
 public:
@@ -21,7 +21,7 @@ private:
     winrt::Windows::UI::Composition::SpriteVisual m_content{ nullptr };
     winrt::Windows::UI::Composition::CompositionSurfaceBrush m_brush{ nullptr };
 
-
+    std::unique_ptr<ClientSocket> mSocket;
     winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice m_device{ nullptr };
     std::unique_ptr<SimpleCapture> m_capture{ nullptr };
     winrt::Windows::Graphics::DirectX::DirectXPixelFormat m_pixelFormat = winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized;
