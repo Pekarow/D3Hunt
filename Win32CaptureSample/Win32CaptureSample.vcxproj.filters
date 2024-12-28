@@ -66,6 +66,9 @@
     <None Include="fra.traineddata">
       <Filter>utils</Filter>
     </None>
+    <None Include="DofusHunt.bat">
+      <Filter>utils</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="ClientSocket">
@@ -97,5 +100,10 @@
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="requirements.txt">
+      <Filter>python-server</Filter>
+    </Text>
   </ItemGroup>
 </Project>
