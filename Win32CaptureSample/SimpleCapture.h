@@ -38,8 +38,6 @@ private:
     void OnFrameArrived(
         winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
         winrt::Windows::Foundation::IInspectable const& args);
-    void sendCommand(KeyboardState action, std::list<int> commands);
-    void sendClick(cv::Rect area);
     inline void CheckClosed()
     {
         if (m_closed.load() == true)

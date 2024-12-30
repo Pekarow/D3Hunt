@@ -523,7 +523,7 @@ void DofusHuntAnalyzer::findCurrentPos()
 	int ind = (int)top_left_s.find("\n");
 	string sub_pos = top_left_s.substr(ind);
 	trim(sub_pos);
-	int space = (int)sub_pos.find(' ');
+	int space = (int)sub_pos.find(" - ");
 	string pos = sub_pos.substr(0, space);
 	int coma = (int)pos.find(',');
 	int x_pos = std::stoi(pos.substr(0, coma));

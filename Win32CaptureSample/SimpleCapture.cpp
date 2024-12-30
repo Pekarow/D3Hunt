@@ -1,14 +1,13 @@
 #include "pch.h"
+#include <windows.h>
 #include "SimpleCapture.h"
 #include "DofusHuntAnalyzer.h"
 #include "DofusDBUtils.h"
-
+#include < ctime >
 #define RETURN_SET_STATE(state)\
-	mState = state; \
-	cv::imshow("show", c); \
-	cv::waitKey(0); \
-	mProcessingFrame = false; \
+	mState = state;\
 	return;
+
 namespace winrt
 {
 	using namespace Windows::Foundation;
@@ -26,17 +25,132 @@ namespace util
 {
 	using namespace robmikh::common::uwp;
 }
-#define Z 0x00
-#define CTRL 0x00
-#define ARROW_UP 0x00
-#define ARROW_DOWN 0x00
-#define ARROW_LEFT 0x00
-#define ARROW_RIGHT 0x00
+#define Z 0x5A
+#define ENTER VK_RETURN
+#define TAB VK_TAB
+#define CTRL VK_CONTROL
+#define ARROW_UP VK_UP
+#define ARROW_DOWN VK_DOWN
+#define ARROW_LEFT VK_LEFT
+#define ARROW_RIGHT VK_RIGHT
+#define CTRL_ARROW_UP {CTRL, ARROW_UP}
+#define CTRL_ARROW_DOWN {CTRL, ARROW_DOWN}
+#define CTRL_ARROW_LEFT {CTRL, ARROW_LEFT}
+#define CTRL_ARROW_RIGHT {CTRL, ARROW_RIGHT}
+namespace
+{
+
+	void SendKeys(std::vector<SHORT> keys)
+	{
+		unsigned int size = (UINT)(keys.size() * 2);
+		INPUT* inputs = new INPUT[size];
+		unsigned int i = 0;
+		for (SHORT key : keys)
+		{
+			UINT mappedkey;
+			INPUT input;
+			mappedkey = MapVirtualKey(LOBYTE(key), 0);
+			SHORT res = GetAsyncKeyState(key);
+			input.type = INPUT_KEYBOARD;
+			input.ki.dwFlags = KEYEVENTF_SCANCODE;
+			input.ki.wScan = mappedkey;
+			*(inputs + i) = input;
+			i++;
+		}
+
+		for (SHORT key : keys)
+		{
+			UINT mappedkey;
+			INPUT input;
+			mappedkey = MapVirtualKey(LOBYTE(key), 0);
+			SHORT res = GetAsyncKeyState(key);
+			input.type = INPUT_KEYBOARD;
+			input.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+			input.ki.wScan = mappedkey;
+			*(inputs + i) = input;
+			i++;
+		}
+		SendInput(size, inputs, sizeof(INPUT));
+	}
+	void SendKeyPress(SHORT key)
+	{
+		UINT mappedkey;
+		INPUT input;
+		mappedkey = MapVirtualKey(LOBYTE(key), 0);
+		SHORT res = GetAsyncKeyState(key);
+		input.type = INPUT_KEYBOARD;
+		input.ki.dwFlags = KEYEVENTF_SCANCODE;
+		input.ki.wScan = mappedkey;
+		SendInput(1, &input, sizeof(INPUT));
+	}
+
+	void SendKeyRelease(SHORT key)
+	{
+		UINT mappedkey;
+		INPUT input;
+		mappedkey = MapVirtualKey(LOBYTE(key), 0);
+		SHORT res = GetAsyncKeyState(key);
+		input.type = INPUT_KEYBOARD;
+		input.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+		input.ki.wScan = mappedkey;
+		SendInput(1, &input, sizeof(INPUT));
+	}
+	void SendClick(cv::Rect rect)
+	{
+		srand((UINT)time(0));
+		int randomX = rect.x + rand() % rect.width;
+		int randomY = rect.y + rand() % rect.height;
+		INPUT Inputs[3] = { 0 };
+
+		Inputs[0].type = INPUT_MOUSE;
+		Inputs[0].mi.dx = randomX; // desired X coordinate
+		Inputs[0].mi.dy = randomY; // desired Y coordinate
+		Inputs[0].mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
+
+		Inputs[1].type = INPUT_MOUSE;
+		Inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+
+		Inputs[2].type = INPUT_MOUSE;
+		Inputs[2].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+		SendInput(3, Inputs, sizeof(INPUT));
+	}
+
+	void writeText(std::string msg)
+	{
+		std::vector<INPUT> vec;
+		for (auto ch : msg)
+		{
+			SHORT key = VkKeyScan(ch);;
+			INPUT input = { 0 };
+			input.type = INPUT_KEYBOARD;
+			input.ki.dwFlags = KEYEVENTF_UNICODE;
+			input.ki.wScan = ch;
+			vec.push_back(input);
+
+			input.ki.dwFlags |= KEYEVENTF_KEYUP;
+			vec.push_back(input);
+		}
+		SendInput(vec.size(), vec.data(), sizeof(INPUT));
+	}
+	void travelTo(cv::Point point)
+	{
+		using namespace std::literals;
+		// Focus on chat
+		SendKeys({ TAB });
+		Sleep(1000);
+		writeText("/travel "s + std::to_string(point.x) + " "s + std::to_string(point.y));
+		Sleep(1000);
+		SendKeys({ ENTER });
+		Sleep(1000);
+		SendKeys({ ENTER });
+
+	}
+}
 
 SimpleCapture::SimpleCapture(
 	winrt::IDirect3DDevice const& device,
 	winrt::GraphicsCaptureItem const& item,
-	winrt::DirectXPixelFormat pixelFormat, HWND hwnd, ClientSocket * socket)
+	winrt::DirectXPixelFormat pixelFormat, HWND hwnd, ClientSocket* socket)
 {
 	m_lastSize = { -1, -1 };
 	mSocket = socket;
@@ -121,6 +235,20 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 	}
 	return true;
 }
+
+class EventRAII
+{
+public:
+	EventRAII(cv::Mat & image, std::atomic<bool>& processing_frame) : mImage(image), mProcessingFrame(processing_frame) { mProcessingFrame = true; };
+	~EventRAII() {
+		mProcessingFrame = false;
+		cv::imshow("RAII", mImage);
+	};
+private:
+	cv::Mat & mImage;
+	std::atomic<bool>& mProcessingFrame;
+};
+
 void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sender, winrt::IInspectable const&)
 {
 	cv::Mat c;
@@ -131,10 +259,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	}
 	if (mProcessingFrame)
 		return;
-	mProcessingFrame = true;
-
-
-
+	EventRAII ev(c, mProcessingFrame);
 	State previousState = mState;
 	DofusHuntAnalyzer analyzer(c);
 	bool hunt_started = analyzer.interfaceFound();
@@ -165,13 +290,13 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		else if (previousState == State::WaitingToReachHintPostion)
 		{
 			// Validate hint
-			sendClick(analyzer.getLastHintValidationPosition());
+			SendClick(analyzer.getLastHintValidationPosition());
 			RETURN_SET_STATE(State::StartHunt);
 		}
 		else if (previousState == State::WaitingToReachPhorreurPostion)
 		{
 			// Press on Z to display Phorreur
-			sendCommand(KeyboardState::PUSH, { Z });
+			SendKeyPress(Z);
 			RETURN_SET_STATE(State::SearchPhorreur);
 		}
 	}
@@ -181,28 +306,29 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		if (analyzer.isPhorreurFound())
 		{
 			// Validate hint
-			sendClick(analyzer.getLastHintValidationPosition());
+			SendClick(analyzer.getLastHintValidationPosition());
 			phorreur_state = State::StartHunt;
 		}
 		else
 		{
 			int direction = analyzer.getLastHintDirection();
 			// Travel 1 map in direction
-			sendCommand(KeyboardState::PUSH_RELEASE, { CTRL, ARROW_UP });
+			SendKeys({ CTRL, ARROW_UP });
 			// TODO: Make direction a vector
 			// mTargetPosition = analyzer.getCurrentPosition() + direction;
 			phorreur_state = State::WaitingToReachPhorreurPostion;
 		}
 		// TODO: Release Z press, could be done via signal?
-		sendCommand(KeyboardState::RELEASE, { Z });
+		SendKeyRelease(Z);
 		RETURN_SET_STATE(phorreur_state);
 	}
 	if (previousState == State::StartHunt)
 	{
 		if (analyzer.getHuntStep() == 1 &&
-			analyzer.getLastHintIndex() == 1 &&
+			analyzer.getLastHintIndex() == 0 &&
 			analyzer.getCurrentPosition() != analyzer.getStartPosition())
 		{
+			mTargetPosition = analyzer.getStartPosition();
 			RETURN_SET_STATE(State::WaitingToReachHuntPostion);
 		}
 		// Retrieve infos on the hunt
@@ -222,14 +348,12 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		mSocket->receive(&out, size);
 		std::string out_s(out);
 		// TODO: Go to pos "out"
+		int index = (int)out_s.find("/");
+		cv::Point p = { std::stoi(out_s.substr(0, index)),std::stoi(out_s.substr(index + 1)) };
+		SetForegroundWindow(mHWND);
+		travelTo(p);
 		RETURN_SET_STATE(State::WaitingToReachHintPostion);
 	}
 }
 
-void SimpleCapture::sendCommand(KeyboardState action, std::list<int> target)
-{
-}
 
-void SimpleCapture::sendClick(cv::Rect area)
-{
-}
