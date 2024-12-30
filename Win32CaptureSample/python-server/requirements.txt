@@ -1,1 +1,2 @@
+setuptools
 undetected_chromedriver
