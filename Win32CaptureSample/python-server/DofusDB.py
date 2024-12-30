@@ -3,98 +3,109 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+import undetected_chromedriver as uc
+import re
+
 from time import sleep
 import difflib
+x_xpath = '/html/body/div[1]/div/div/main/div/div[3]/div[1]/label/div/div[1]/div/input'
+y_xpath = '/html/body/div[1]/div/div/main/div/div[3]/div[2]/label/div/div[1]/div/input'
+pattern = r'.[\d]+,.[\d]+'
+regex = re.compile(pattern)
 def clear(elem):
     elem.send_keys(Keys.CONTROL + "a")
     elem.send_keys(Keys.DELETE)
 class DofusDB:
     def __init__(self) -> None:
         # Initialization of selenium connection
-        chrome_options = webdriver.ChromeOptions()
-        # p = os.path.join(__file__, '..', 'chromedriver.exe')
-        # Set the executable path for the Chrome WebDriver
-        #chrome_options.add_argument(f"webdriver.chrome.driver=[{p}]")
+        chrome_options = uc.ChromeOptions()
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--profile-directory=Default')
+        chrome_options.add_argument("--incognito")
+        chrome_options.add_argument("--disable-plugins-discovery")
+        chrome_options.add_argument("--start-maximized")
+        self.driver = uc.Chrome(options=chrome_options)
 
-        self.driver = webdriver.Chrome(options=chrome_options)
-       # self.driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS)
-       
+        self.driver.delete_all_cookies()
         self.driver.get("https://dofusdb.fr/fr/tools/treasure-hunt")
         
     def set_x_position(self, pos: int) -> None:
         # Set position of X coordinate in browser
-        x_xpath = '/html/body/div[1]/div/div[2]/main/div/div[3]/div[1]/label/div/div[1]/div/input'
+        
         elem = WebDriverWait(self.driver, 30).until(
                  EC.presence_of_element_located((By.XPATH, x_xpath)))
         clear(elem)
         elem.send_keys(pos)
-        pass
+
     def set_y_position(self, pos: int) -> None:
         # Set position of Y coordinate in browser
-        y_xpath = '/html/body/div[1]/div/div[2]/main/div/div[3]/div[2]/label/div/div[1]/div/input'
+        
         elem = WebDriverWait(self.driver, 30).until(
                  EC.presence_of_element_located((By.XPATH, y_xpath)))
         clear(elem)
         elem.send_keys(pos)
-        pass
+
     def set_direction(self, pos: int) -> None:
         # Set direction in browser
-        top_xpath = '//*[@id="q-app"]/div/div[2]/main/div/div[5]/div[1]/span[1]'
-        right_xpath = '//*[@id="q-app"]/div/div[2]/main/div/div[5]/div[1]/span[2]'
-        bot_xpath = '//*[@id="q-app"]/div/div[2]/main/div/div[5]/div[2]/span[2]'
-        left_xpath = '//*[@id="q-app"]/div/div[2]/main/div/div[5]/div[2]/span[1]'
+        actions = ActionChains(self.driver)
         
-        path  = ""
         if pos == 0:
-            path = top_xpath
+            actions.send_keys(Keys.ARROW_UP)
         elif pos == 1:
-            path = right_xpath
+            actions.send_keys(Keys.ARROW_RIGHT)
         elif pos == 2:
-            path = bot_xpath
+            actions.send_keys(Keys.ARROW_DOWN)
         elif pos == 3:
-            path = left_xpath
-            
-        elem = WebDriverWait(self.driver, 30).until(
-                 EC.presence_of_element_located((By.XPATH, path)))
-        elem.click()
-        
-        pass
-    def set_hint(self, hint: str) -> None:
-        # Set direction in browser
-        hint_xpath = '//*[@id="q-app"]/div/div[2]/main/div/div[7]/div/label/div/div/div[2]/i'
-        options_xpath = '/html/body/div[5]'
-        hint_input = '/html/body/div[1]/div/div[2]/main/div/div[7]/div/label/div/div/div[1]/div/input'
+            actions.send_keys(Keys.ARROW_LEFT)
+        actions.perform()
+        sleep(1)
 
+    def set_hint(self, hint: str) -> None:
+        # Set hint based on available choices
+        hint_xpath = '/html/body/div[1]/div/div/main/div/div[7]/div/label/div/div/div[2]/i'
         elem = WebDriverWait(self.driver, 30).until(
                  EC.presence_of_element_located((By.XPATH, hint_xpath)))
         elem.click()
+        sleep(1)
         elem = WebDriverWait(self.driver, 30).until(
-                 EC.presence_of_element_located((By.XPATH, options_xpath)))
+                 EC.presence_of_element_located((By.CLASS_NAME, "q-menu")))
+
         elems = elem.find_elements(By.CLASS_NAME, "q-item__label")
         elems_string = [e.text for e in elems]
+        print(elems_string)
         closest = difflib.get_close_matches(word=hint, possibilities=elems_string, n=1, cutoff=.8)
+        print(closest)
+        sleep(1)
+        actions = ActionChains(self.driver)
+        actions.send_keys(*closest)
+        actions.pause(1)
+        actions.send_keys(Keys.DOWN)
+        actions.send_keys(Keys.ENTER)
+        actions.perform()
         
-        elem = WebDriverWait(self.driver, 30).until(
-                 EC.presence_of_element_located((By.XPATH, hint_input)))
-        elem.send_keys(closest)
-        elem.send_keys(Keys.DOWN)
-        elem.send_keys(Keys.ENTER)
 
     def get_hint_position(self)->"tuple[str,str]":
         
-        pos = '//*[@id="q-app"]/div/div[2]/main/div/div[9]/div/div[2]/span'
         elem = WebDriverWait(self.driver, 30).until(
-                 EC.presence_of_element_located((By.XPATH, pos)))
-        return tuple(elem.text[1:-1].split(','))
+                EC.presence_of_element_located((By.TAG_NAME, "main")))
+
+        results = regex.findall(elem.text, re.DOTALL)
+        return tuple(results[0].split(','))
 
 if __name__ == "__main__":
     db = DofusDB()
-    db.set_x_position(1)
-    db.set_y_position(1)
+    db.set_x_position(12)
+    db.set_y_position(-63)
+    # sleep(4)
+
     db.set_direction(1)
-    db.set_hint("anneau dor")
+    # sleep(5)
+    db.set_hint("Cactus sans pines")
+    sleep(1)
     x, y = db.get_hint_position()
-    print(x)
-    db.set_x_position(int(x))
-    db.set_y_position(int(y))
-    print()
+    print(x, y)
+    # db.set_x_position(int(x))
+    # db.set_y_position(int(y))
+    db.driver.close()
+    
