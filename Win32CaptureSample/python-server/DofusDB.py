@@ -25,7 +25,7 @@ class DofusDB:
         chrome_options.add_argument("--incognito")
         chrome_options.add_argument("--disable-plugins-discovery")
         chrome_options.add_argument("--start-maximized")
-        options.add_argument("--headless=new")
+        chrome_options.add_argument("--headless=new")
         self.driver = uc.Chrome(options=chrome_options)
 
         self.driver.delete_all_cookies()
