@@ -21,31 +21,86 @@ namespace util
 
 //int __stdcall WinMain(HINSTANCE, HINSTANCE, PSTR, int)
 //{
-//	ClientSocket socket;
-//	cv::Mat img = cv::imread("D:\\test_build\\python test\\test.png");
-//	auto analyzer = DofusHuntAnalyzer(img);
-//	bool ok = analyzer.interfaceFound();
-//	if (ok)
+	//ClientSocket socket;
+	//cv::Mat img = cv::imread("D:\\test_build\\python test\\test.png");
+	//auto analyzer = DofusHuntAnalyzer(img);
+	//bool ok = analyzer.interfaceFound();
+	//if (ok)
+	//{
+	//	auto [x, y] = analyzer.getCurrentPosition();
+	//	DofusDB::DBInfos infos = { x, y, analyzer.getLastHintDirection(), 0, analyzer.getLastHint() };
+
+	//	socket.send(DofusDB::DBInfos2json(infos).c_str());
+	//	char* out;
+	//	int size;
+	//	socket.receive(&out, size);
+	//	std::wstring ws(&out[0], &out[size]);
+
+	//	MessageBoxW(nullptr,
+	//		ws.c_str(),
+	//		ws.c_str(),
+	//		MB_OK | MB_ICONERROR);
+	//}
+	//cv::imshow("t", img);
+	//cv::waitKey(0);
+	//int i = 0;
+	//while(i < 100)
+	//{
+	//	INPUT Inputs[3] = { 0 };
+
+	//	Inputs[0].type = INPUT_MOUSE;
+	//	Inputs[0].mi.dx = 1; // desired X coordinate
+	//	Inputs[0].mi.dy = 1; // desired Y coordinate
+	//	Inputs[0].mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP;
+
+	//	SendInput(1, Inputs, sizeof(INPUT));
+	//}
+	//return 0;
+//}
+
+//#include "WindowList.h"
+//float lint2(float a, float b, float f, float f2 )
 //	{
-//		auto [x, y] = analyzer.getCurrentPosition();
-//		DofusDB::DBInfos infos = { x, y, analyzer.getLastHintDirection(), 0, analyzer.getLastHint() };
+//	return (f * (b - a)) - (f2 * (b - a));
+//}
 //
-//		socket.send(DofusDB::DBInfos2json(infos).c_str());
-//		char* out;
-//		int size;
-//		socket.receive(&out, size);
-//		std::wstring ws(&out[0], &out[size]);
+//void SendClick(cv::Rect rect, HWND hwnd)
+//{
+//	POINT p;
+//	GetCursorPos(&p);
+//	ScreenToClient(hwnd, &p);
+//	srand((UINT)time(0));
 //
-//		MessageBoxW(nullptr,
-//			ws.c_str(),
-//			ws.c_str(),
-//			MB_OK | MB_ICONERROR);
+//	int randomX = rect.x + rand() % rect.width;
+//	int randomY = rect.y + rand() % rect.height;
+//
+//	int max_i = 100;
+//	INPUT * Inputs = new INPUT[max_i];
+//	POINT current_pos = p;
+//	for (int i = 1; i < max_i; i++)
+//	{
+//		int calc_x = lint2(p.x, rect.x, (float)i / max_i, (float)(i - 1) / max_i);
+//		int calc_y = lint2(p.y, rect.y, (float)i / max_i, (float)(i - 1) / max_i);
+//
+//		Inputs[i].type = INPUT_MOUSE;
+//		Inputs[i].mi.dx = calc_x; // desired X coordinate
+//		Inputs[i].mi.dy = calc_y; // desired Y coordinate
+//		Inputs[i].mi.dwFlags = MOUSEEVENTF_MOVE;
 //	}
-//	cv::imshow("t", img);
-//	cv::waitKey(0);
+//	SendInput(max_i, Inputs, sizeof(INPUT));
+//	delete [] Inputs;
+//}
 //
+//int __stdcall WinMain(HINSTANCE, HINSTANCE, PSTR, int)
+//{
+//
+//	WindowList list;
+//	cv::Rect r(500, 500, 10, 10);
+//	SendClick(r, list.GetCurrentWindows()[0].WindowHandle);
 //	return 0;
 //}
+
+
 int __stdcall WinMain(HINSTANCE, HINSTANCE, PSTR, int)
 {
 	 //SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2); // works but everything draws small

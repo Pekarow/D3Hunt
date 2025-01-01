@@ -117,7 +117,7 @@ namespace
 				continue;
 			Rect r = cv::boundingRect(c);
 			valid_text_areas.push_back(r);
-			cv::rectangle(image, r, Scalar(255, 0, 255), 1);
+			//cv::rectangle(image, r, Scalar(255, 0, 255), 1);
 		}
 
 		std::string output;
@@ -162,7 +162,7 @@ namespace
 				continue;
 			Rect r = cv::boundingRect(c);
 			valid_text_areas.push_back(r);
-			cv::rectangle(image, r, Scalar(0, 255, 255), 1);
+			//cv::rectangle(image, r, Scalar(0, 255, 255), 1);
 			break;
 		}
 
@@ -227,7 +227,7 @@ namespace
 				continue;
 			Rect r = cv::boundingRect(c);
 			valid_text_areas.push_back(r);
-			cv::rectangle(image, r, Scalar(0, 255, 255), 1);
+			//cv::rectangle(image, r, Scalar(0, 255, 255), 1);
 			break;
 		}
 		assert(valid_text_areas.size() == 1);
@@ -237,6 +237,7 @@ namespace
 
 DofusHuntAnalyzer::DofusHuntAnalyzer(cv::Mat& image) : mImage(image)
 {
+	mImageDebug = mImage.clone();
 	if (!gTesseractAPI)
 	{
 		gTesseractAPI = new tesseract::TessBaseAPI();
@@ -356,9 +357,13 @@ bool DofusHuntAnalyzer::isPhorreurFound()
 
 void DofusHuntAnalyzer::initHuntInfos()
 {
-	findInterface();
+	if(!interfaceFound()) return;
 	Mat _interface(mImage, mInterfaceRect);
-	vector<Rect> rects = FindRectInImage(_interface, HINT_LOWER, HINT_UPPER);
+	vector<Rect> rects = FindRectInImage(_interface, HINT_LOWER, HINT_UPPER, "", mInterfaceRect.width - 10);
+	for (auto r : rects)
+	{
+		rectangle(_interface, r, Scalar(0, 255, 0));
+	}
 	// order by y axis, meaning the order will be from top rect to bottom
 	std::sort(rects.begin(), rects.end(), [](Rect p1, Rect p2) { return p1.y < p2.y; });
 	// get step infos
@@ -400,7 +405,10 @@ void DofusHuntAnalyzer::initHuntInfos()
 
 			Rect validation_rect(_rect.width - offset_start, _rect.y, offset_start, _rect.height);
 			Mat validation_pos(_interface, validation_rect);
-			mLastHintValidationPosition = getValidationPosition(validation_pos);
+			Rect last_hint_validation_position = getValidationPosition(validation_pos);
+			last_hint_validation_position.x += validation_rect.x + mInterfaceRect.x;
+			last_hint_validation_position.y += validation_rect.y + mInterfaceRect.y;
+			mLastHintValidationPosition = last_hint_validation_position;
 
 			Rect direction_rect(_rect.x, _rect.y, offset_start, _rect.height);
 			Mat direction(_interface, direction_rect);
@@ -414,14 +422,16 @@ void DofusHuntAnalyzer::initHuntInfos()
 
 void DofusHuntAnalyzer::findInterface()
 {
-	vector<Rect> rects = FindRectInImage(mImage, INTERFACE_LOWER, INTERFACE_UPPER);
+	vector<Rect> rects = FindRectInImage(mImage, INTERFACE_LOWER, INTERFACE_UPPER, "", 100, 100);
 	for (const Rect& r : rects)
 	{
-		float ratio = (float)(r.width / r.height);
-		if (ratio < .7 || ratio > 1.3)
+		float ratio = (float)(r.height) / r.width;
+
+		if (ratio < .7 || ratio > 3)
 		{
 			continue;
 		}
+		//rectangle(mImage, r, Scalar(0, 255, 0), 1);
 		Mat sub(mImage, r);
 		vector<Rect> founds = FindRectInImage(sub, TITLE_LOWER, TITLE_UPPER, TITLE_S);
 		Rect title_rect;
@@ -430,7 +440,7 @@ void DofusHuntAnalyzer::findInterface()
 			if (found.y < 10 && found.x < 10)
 			{
 				mInterfaceRect = r;
-				rectangle(mImage, mInterfaceRect, Scalar(0, 255, 0), 1);
+				rectangle(mImageDebug, mInterfaceRect, Scalar(0, 255, 0), 1);
 				return;
 			}
 		}
@@ -479,7 +489,7 @@ void DofusHuntAnalyzer::findHuntArea()
 	}
 	Rect r = cv::boundingRect(final_contours[0]);
 	Rect inner_rect = findInnerRect(final_contours[0], Point(mImage.cols / 2, mImage.rows / 2));
-	cv::rectangle(mImage, inner_rect, Scalar(100, 255, 255));
+	cv::rectangle(mImageDebug, inner_rect, Scalar(100, 255, 255));
 	mHuntArea = inner_rect;
 	mHuntAreaFound = true;
 }
@@ -487,7 +497,7 @@ void DofusHuntAnalyzer::findHuntArea()
 void DofusHuntAnalyzer::findCurrentPos()
 {
 	cv::Mat grey;
-	cv::cvtColor(mImage, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
+	cv::cvtColor(mImageDebug, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
 
 
 	Mat adaptive_thresh;
@@ -511,6 +521,12 @@ void DofusHuntAnalyzer::findCurrentPos()
 		if (area < 100)
 			continue;
 		Rect r = cv::boundingRect(contour);
+		float ratio = (float)(r.height) / r.width;
+
+		if (ratio < .1 || ratio > 10)
+		{
+			continue;
+		}
 		if (top_left.x > r.x && top_left.y > r.y)
 		{
 			top_left = r;
@@ -519,7 +535,7 @@ void DofusHuntAnalyzer::findCurrentPos()
 
 	Mat sub_mat(mImage, top_left);
 	string top_left_s = getTextFromImage(sub_mat, gTesseractAPI, false);
-	cv::rectangle(mImage, top_left, Scalar(100, 100, 255), 1);
+	cv::rectangle(mImageDebug, top_left, Scalar(100, 100, 255), 1);
 	int ind = (int)top_left_s.find("\n");
 	string sub_pos = top_left_s.substr(ind);
 	trim(sub_pos);
@@ -532,7 +548,7 @@ void DofusHuntAnalyzer::findCurrentPos()
 	mCurrentPositionFound = true;
 }
 
-vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, Scalar upper_bound, string text_content)
+vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, Scalar upper_bound, string text_content, int minimum_width, int minimum_height)
 {
 	vector<Rect> valid_contours;
 	if (image.empty())
@@ -558,20 +574,21 @@ vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, 
 	vector<Vec4i> hierarchy;
 
 	cv::findContours(thresh, contours, hierarchy, 1, 2);
+	//drawContours(mImage, contours, -1, Scalar(1, 1, 1), 2);
 	for (const vector<Point> contour : contours)
 	{
 
 		auto [x1, y1] = contour[0];
 		vector<Point> approx;
-		cv::approxPolyDP(contour, approx, .01 * cv::arcLength(contour, true), true);
+		//cv::approxPolyDP(contour, approx, .01 * cv::arcLength(contour, true), true);
 
-		if (approx.size() != 4)
-		{
-			continue;
-		}
+		//if (approx.size() != 4)
+		//{
+		//	continue;
+		//}
 		Rect bounds = cv::boundingRect(contour);
 
-		if ((bounds.width < 10 && bounds.height < 10) || bounds.height > bounds.width)
+		if ((bounds.width < minimum_width || bounds.height < minimum_height) )
 			continue;
 		if (!text_content.empty() && !containsText(Mat(image, bounds), text_content))
 		{

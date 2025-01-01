@@ -23,6 +23,7 @@ public:
 	cv::Rect getLastHintValidationPosition();
 	std::pair<int, int> getStepValidationPosition();
 	bool isPhorreurFound();
+	cv::Mat* getDebugImage() { return &mImageDebug; };
 
 
 private:
@@ -30,7 +31,13 @@ private:
 	void findInterface();
 	void findHuntArea();
 	void findCurrentPos();
-	std::vector<cv::Rect> FindRectInImage(cv::Mat& image, cv::Scalar lower_bound, cv::Scalar upper_bound, std::string text_content="");
+	std::vector<cv::Rect> FindRectInImage(
+		cv::Mat& image, 
+		cv::Scalar lower_bound, 
+		cv::Scalar upper_bound, 
+		std::string text_content="", 
+		int minimum_width=10, 
+		int minimum_height = 10);
 	bool containsText(cv::Mat& image, std::string text);
 private:
 	bool mCurrentPositionFound = false;
@@ -42,6 +49,7 @@ private:
 	cv::Rect mLastHintValidationPosition;
 	cv::Rect mHuntArea;
 	cv::Mat& mImage;
+	cv::Mat mImageDebug;
 	std::string mLastHint;
 	int mCurrentStep = -1;
 	int mMaxStep = -1;

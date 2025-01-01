@@ -39,7 +39,7 @@ namespace util
 #define CTRL_ARROW_RIGHT {CTRL, ARROW_RIGHT}
 namespace
 {
-
+	
 	void SendKeys(std::vector<SHORT> keys)
 	{
 		unsigned int size = (UINT)(keys.size() * 2);
@@ -95,24 +95,37 @@ namespace
 		input.ki.wScan = mappedkey;
 		SendInput(1, &input, sizeof(INPUT));
 	}
-	void SendClick(cv::Rect rect)
+
+	float lint2(float a, float b, float f, float f2)
 	{
+		return (f * (b - a)) - (f2 * (b - a));
+	}
+
+	void SendClick(cv::Rect rect, HWND hwnd)
+	{
+		POINT p;
+		GetCursorPos(&p);
+		ScreenToClient(hwnd, &p);
 		srand((UINT)time(0));
+
 		int randomX = rect.x + rand() % rect.width;
 		int randomY = rect.y + rand() % rect.height;
-		INPUT Inputs[3] = { 0 };
 
-		Inputs[0].type = INPUT_MOUSE;
-		Inputs[0].mi.dx = randomX; // desired X coordinate
-		Inputs[0].mi.dy = randomY; // desired Y coordinate
-		Inputs[0].mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
+		int max_i = 100;
+		INPUT* Inputs = new INPUT[max_i];
+		POINT current_pos = p;
+		for (int i = 1; i < max_i; i++)
+		{
+			int calc_x = lint2(p.x, rect.x, (float)i / max_i, (float)(i - 1) / max_i);
+			int calc_y = lint2(p.y, rect.y, (float)i / max_i, (float)(i - 1) / max_i);
 
-		Inputs[1].type = INPUT_MOUSE;
-		Inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-
-		Inputs[2].type = INPUT_MOUSE;
-		Inputs[2].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-		SendInput(3, Inputs, sizeof(INPUT));
+			Inputs[i].type = INPUT_MOUSE;
+			Inputs[i].mi.dx = calc_x; // desired X coordinate
+			Inputs[i].mi.dy = calc_y; // desired Y coordinate
+			Inputs[i].mi.dwFlags = MOUSEEVENTF_MOVE;
+		}
+		SendInput(max_i, Inputs, sizeof(INPUT));
+		delete[] Inputs;
 	}
 
 	void writeText(std::string msg)
@@ -236,18 +249,7 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 	return true;
 }
 
-class EventRAII
-{
-public:
-	EventRAII(cv::Mat & image, std::atomic<bool>& processing_frame) : mImage(image), mProcessingFrame(processing_frame) { mProcessingFrame = true; };
-	~EventRAII() {
-		mProcessingFrame = false;
-		cv::imshow("RAII", mImage);
-	};
-private:
-	cv::Mat & mImage;
-	std::atomic<bool>& mProcessingFrame;
-};
+
 
 void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sender, winrt::IInspectable const&)
 {
@@ -259,13 +261,14 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	}
 	if (mProcessingFrame)
 		return;
-	EventRAII ev(c, mProcessingFrame);
+	EventRAII ev(*this);
 	State previousState = mState;
 	DofusHuntAnalyzer analyzer(c);
+	ev.setImage(analyzer.getDebugImage());
 	bool hunt_started = analyzer.interfaceFound();
 	if (!hunt_started)
 	{
-		RETURN_SET_STATE(State::NoHunt);
+		RETURN_SET_STATE(previousState);
 	}
 	else if (previousState == State::NoHunt)
 	{
@@ -290,7 +293,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		else if (previousState == State::WaitingToReachHintPostion)
 		{
 			// Validate hint
-			SendClick(analyzer.getLastHintValidationPosition());
+			SendClick(analyzer.getLastHintValidationPosition(), mHWND);
 			RETURN_SET_STATE(State::StartHunt);
 		}
 		else if (previousState == State::WaitingToReachPhorreurPostion)
@@ -306,7 +309,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		if (analyzer.isPhorreurFound())
 		{
 			// Validate hint
-			SendClick(analyzer.getLastHintValidationPosition());
+			SendClick(analyzer.getLastHintValidationPosition(), mHWND);
 			phorreur_state = State::StartHunt;
 		}
 		else
@@ -352,8 +355,26 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		cv::Point p = { std::stoi(out_s.substr(0, index)),std::stoi(out_s.substr(index + 1)) };
 		SetForegroundWindow(mHWND);
 		travelTo(p);
+		mTargetPosition = { p.x, p.y };
 		RETURN_SET_STATE(State::WaitingToReachHintPostion);
 	}
 }
 
+inline SimpleCapture::EventRAII::EventRAII(SimpleCapture& sc) : mCapture(sc) { 
+	sc.setProcessingFrame(true); 
+}
 
+void SimpleCapture::EventRAII::setImage(cv::Mat* image)
+{
+	mImage = image;
+	cv::namedWindow("RAII", cv::WINDOW_NORMAL);
+}
+
+inline SimpleCapture::EventRAII::~EventRAII() {
+	if(mImage)
+	{
+		//cv::imshow("RAII", *mImage);
+		//cv::waitKey(0);
+	}
+	mCapture.setProcessingFrame(false);
+}

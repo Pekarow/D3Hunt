@@ -45,7 +45,10 @@ private:
             throw winrt::hresult_error(RO_E_CLOSED);
         }
     }
-
+protected:
+    inline void setProcessingFrame(bool proc) {
+        mProcessingFrame = proc;
+    }
 private:
     winrt::Windows::Graphics::Capture::GraphicsCaptureItem m_item{ nullptr };
     winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool m_framePool{ nullptr };
@@ -64,4 +67,16 @@ private:
     ClientSocket * mSocket = nullptr;
     HWND mHWND;
     std::atomic<bool> mProcessingFrame = false;
+
+    friend class EventRAII;
+    class EventRAII
+    {
+    public:
+        EventRAII(SimpleCapture& sc);
+        void setImage(cv::Mat* image);
+        ~EventRAII();
+    private:
+        SimpleCapture& mCapture;
+        cv::Mat* mImage = nullptr;
+    };
 };
