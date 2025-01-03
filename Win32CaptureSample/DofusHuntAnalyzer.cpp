@@ -3,6 +3,7 @@
 #include <ranges>
 #include <cctype>
 #include <math.h>
+#include <cmath>
 using namespace std;
 using namespace cv;
 
@@ -11,6 +12,9 @@ namespace
 	static tesseract::TessBaseAPI* gTesseractAPI = nullptr;
 	const Scalar INTERFACE_LOWER = Scalar(103, 0, 41);
 	const Scalar INTERFACE_UPPER = Scalar(146, 255, 255);
+
+	const Scalar CURRENT_POS_LOWER = Scalar(0, 0, 10);
+	const Scalar CURRENT_POS_UPPER = Scalar(0, 0, 255);
 
 	const Scalar TITLE_LOWER = Scalar(98, 60, 83);
 	const Scalar TITLE_UPPER = Scalar(180, 255, 190);
@@ -87,7 +91,7 @@ namespace
 		vector<Point> inner_contour = { top_left.second  ,  top_right.second  ,  bot_left.second  ,  bot_right.second };
 		return cv::boundingRect(inner_contour);
 	}
-	string getTextFromImage(Mat& image, tesseract::TessBaseAPI* tess, bool remove_endl = true)
+	string getTextFromImage(Mat& image, tesseract::TessBaseAPI* tess, bool remove_endl = true, bool requires_processing = true)
 	{
 		cv::Mat grey;
 		cv::cvtColor(image, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
@@ -124,10 +128,12 @@ namespace
 		for (const auto& text_area : valid_text_areas)
 		{
 			Mat sub_area(grey, text_area);
-			cv::Mat thresh;
-			double ret = cv::threshold(sub_area, thresh, 0, 255, THRESH_OTSU | THRESH_BINARY_INV);
+			if (requires_processing)
+			{
+				cv::threshold(sub_area, sub_area, 0, 255, THRESH_OTSU | THRESH_BINARY_INV);
+			}
 			// recognize text
-			tess->TesseractRect(thresh.data, 1, (int)thresh.step1(), 0, 0, thresh.cols, thresh.rows);
+			tess->SetImage(sub_area.data, sub_area.cols, sub_area.rows, 1, sub_area.step);
 			string t1(tess->GetUTF8Text());
 			if (remove_endl)
 			{
@@ -249,8 +255,9 @@ DofusHuntAnalyzer::DofusHuntAnalyzer(cv::Mat& image) : mImage(image)
 			assert(false);
 			return;
 		}
-		string whiteList = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-";
-		gTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
+		gTesseractAPI->SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
+		//string whiteList = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-";
+		//gTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
 	}
 }
 
@@ -357,7 +364,7 @@ bool DofusHuntAnalyzer::isPhorreurFound()
 
 void DofusHuntAnalyzer::initHuntInfos()
 {
-	if(!interfaceFound()) return;
+	if (!interfaceFound()) return;
 	Mat _interface(mImage, mInterfaceRect);
 	vector<Rect> rects = FindRectInImage(_interface, HINT_LOWER, HINT_UPPER, "", mInterfaceRect.width - 10);
 	for (auto r : rects)
@@ -496,45 +503,61 @@ void DofusHuntAnalyzer::findHuntArea()
 
 void DofusHuntAnalyzer::findCurrentPos()
 {
+	cv::Mat hsv;
+	cv::cvtColor(mImage, hsv, cv::ColorConversionCodes::COLOR_BGR2HSV);
+
+	cv::Mat mask;
+	cv::inRange(hsv, CURRENT_POS_LOWER, CURRENT_POS_UPPER, mask);
+
+	cv::Mat res;
+	cv::bitwise_and(mImage, mImage, res, mask = mask);
+
 	cv::Mat grey;
-	cv::cvtColor(mImage, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
+	cv::cvtColor(res, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
 
-
-	Mat adaptive_thresh;
-	cv::threshold(grey, adaptive_thresh, 250, 255, 0);
+	cv::Mat thresh;
+	double ret = cv::threshold(grey, thresh, 230, 255, 0);
 
 	Mat blur;
-	cv::blur(grey, blur, Size(9, 9));
+	cv::blur(thresh, blur, Size(3, 3));
 	// Dilate to combine adjacent text contours
-	Mat kernel = cv::getStructuringElement(MORPH_RECT, Size(5, 5));
+	Mat kernel = cv::getStructuringElement(MORPH_RECT, Size(7, 3));
 	Mat dilate;
-	cv::dilate(adaptive_thresh, dilate, kernel, Point(-1, -1), 4);
+	cv::dilate(blur, dilate, kernel, Point(-1, -1), 4);
 
 	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
 	cv::findContours(dilate, contours, hierarchy, 1, 2);
 
-	Rect top_left(99999, 99999, 99999, 99999);
+	std::pair<double, cv::Rect> top_left_d = { 99999, Rect() };
 	for (const vector<Point> contour : contours)
 	{
 		double area = cv::contourArea(contour);
-		if (area < 100)
-			continue;
+		if (area < 1000) continue;
+
 		Rect r = cv::boundingRect(contour);
+
+		if (r.width < 10 || r.height < 10) continue;
+		if (r.width > 1000 || r.height > 1000) continue;
+
+		//rectangle(mImage, r, Scalar(0, 0, 244));
 		float ratio = (float)(r.height) / r.width;
 
-		if (ratio < .1 || ratio > 10)
+		if (ratio < .1 || ratio > 10) continue;
+
+		double dist = std::pow((double)std::abs(0 - r.x), (double)2) + std::pow((double)std::abs(0 - r.y), (double)2);
+		if (dist < top_left_d.first)
 		{
-			continue;
-		}
-		if (top_left.x > r.x && top_left.y > r.y)
-		{
-			top_left = r;
+			top_left_d.first = dist;
+			top_left_d.second = r;
 		}
 	}
-
+	auto top_left = top_left_d.second;
 	Mat sub_mat(mImage, top_left);
-	string top_left_s = getTextFromImage(sub_mat, gTesseractAPI, false);
+	string whiteList = "0123456789 -,";
+	//gTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
+	string top_left_s = getTextFromImage(sub_mat, gTesseractAPI, false, true);
+	//gTesseractAPI->SetVariable("tessedit_char_whitelist", "");
 	cv::rectangle(mImageDebug, top_left, Scalar(100, 100, 255), 1);
 	int ind = (int)top_left_s.find("\n");
 	string sub_pos = top_left_s.substr(ind);
@@ -588,7 +611,7 @@ vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, 
 		//}
 		Rect bounds = cv::boundingRect(contour);
 
-		if ((bounds.width < minimum_width || bounds.height < minimum_height) )
+		if ((bounds.width < minimum_width || bounds.height < minimum_height))
 			continue;
 		if (!text_content.empty() && !containsText(Mat(image, bounds), text_content))
 		{
