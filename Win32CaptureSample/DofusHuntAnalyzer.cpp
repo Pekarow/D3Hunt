@@ -497,7 +497,7 @@ void DofusHuntAnalyzer::findHuntArea()
 void DofusHuntAnalyzer::findCurrentPos()
 {
 	cv::Mat grey;
-	cv::cvtColor(mImageDebug, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
+	cv::cvtColor(mImage, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
 
 
 	Mat adaptive_thresh;

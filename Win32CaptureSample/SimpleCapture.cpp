@@ -98,7 +98,7 @@ namespace
 
 	float lint2(float a, float b, float f, float f2)
 	{
-		return (f * (b - a)) - (f2 * (b - a));
+		return std::lerp(a, b, f) - std::lerp(a, b, f2);
 	}
 
 	void SendClick(cv::Rect rect, HWND hwnd)
@@ -113,18 +113,29 @@ namespace
 
 		int max_i = 100;
 		INPUT* Inputs = new INPUT[max_i];
-		POINT current_pos = p;
+		Inputs[0] = { 0 };
+
 		for (int i = 1; i < max_i; i++)
 		{
 			int calc_x = lint2(p.x, rect.x, (float)i / max_i, (float)(i - 1) / max_i);
 			int calc_y = lint2(p.y, rect.y, (float)i / max_i, (float)(i - 1) / max_i);
-
+			Inputs[i] = { 0 };
 			Inputs[i].type = INPUT_MOUSE;
 			Inputs[i].mi.dx = calc_x; // desired X coordinate
 			Inputs[i].mi.dy = calc_y; // desired Y coordinate
 			Inputs[i].mi.dwFlags = MOUSEEVENTF_MOVE;
 		}
-		SendInput(max_i, Inputs, sizeof(INPUT));
+
+		Inputs[max_i - 1] = { 0 };
+		Inputs[max_i - 1].type = INPUT_MOUSE;
+		Inputs[max_i - 1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP;
+
+		SendInput(max_i-1, Inputs, sizeof(INPUT));
+		
+		SetCursorPos(randomX, randomY);
+		SendInput(1, &(Inputs[max_i - 1]), sizeof(INPUT));
+		SetCursorPos(p.x, p.y);
+
 		delete[] Inputs;
 	}
 
@@ -150,11 +161,11 @@ namespace
 		using namespace std::literals;
 		// Focus on chat
 		SendKeys({ TAB });
-		Sleep(1000);
+		Sleep(200);
 		writeText("/travel "s + std::to_string(point.x) + " "s + std::to_string(point.y));
-		Sleep(1000);
+		Sleep(100);
 		SendKeys({ ENTER });
-		Sleep(1000);
+		Sleep(500);
 		SendKeys({ ENTER });
 
 	}
@@ -367,7 +378,7 @@ inline SimpleCapture::EventRAII::EventRAII(SimpleCapture& sc) : mCapture(sc) {
 void SimpleCapture::EventRAII::setImage(cv::Mat* image)
 {
 	mImage = image;
-	cv::namedWindow("RAII", cv::WINDOW_NORMAL);
+	//cv::namedWindow("RAII", cv::WINDOW_NORMAL);
 }
 
 inline SimpleCapture::EventRAII::~EventRAII() {
