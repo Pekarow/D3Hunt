@@ -3,7 +3,13 @@
 #include "SimpleCapture.h"
 #include "DofusHuntAnalyzer.h"
 #include "DofusDBUtils.h"
-#include < ctime >
+
+#include <tesseract/baseapi.h>
+#include <chrono>
+#include <iomanip>
+#include <fstream>
+#include "CaptureUtils.h"
+
 #define RETURN_SET_STATE(state)\
 	mState = state;\
 	return;
@@ -25,137 +31,87 @@ namespace util
 {
 	using namespace robmikh::common::uwp;
 }
-#define Z 0x5A
-#define ENTER VK_RETURN
-#define TAB VK_TAB
-#define CTRL VK_CONTROL
-#define ARROW_UP VK_UP
-#define ARROW_DOWN VK_DOWN
-#define ARROW_LEFT VK_LEFT
-#define ARROW_RIGHT VK_RIGHT
-#define CTRL_ARROW_UP {CTRL, ARROW_UP}
-#define CTRL_ARROW_DOWN {CTRL, ARROW_DOWN}
-#define CTRL_ARROW_LEFT {CTRL, ARROW_LEFT}
-#define CTRL_ARROW_RIGHT {CTRL, ARROW_RIGHT}
+
 namespace
 {
+	static tesseract::TessBaseAPI* gTesseractAPI = nullptr;
+	std::string getCurrentTimestamp() {
+		// Get the current time
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+
+		// Convert to local time and format as a string
+		std::tm local_time;
+		localtime_s(&local_time, &now_time); // Windows-specific local time conversion
+
+		std::stringstream ss;
+		ss << std::put_time(&local_time, "%Y%m%d_%H%M%S");
+
+		return ss.str();
+	}
+	void initTesseractAPI()
+	{
+		if (!gTesseractAPI)
+		{
+			gTesseractAPI = new tesseract::TessBaseAPI();
+			printf("Tesseract-ocr version: %s\n",
+				gTesseractAPI->Version());
+			// Initialize tesseract-ocr with English, without specifying tessdata path
+			if (gTesseractAPI->Init(NULL, "fra+eng")) {
+				fprintf(stderr, "Could not initialize tesseract.\n");
+				assert(false);
+				return;
+			}
+			//resetTesseractAPI(tesseract::PSM_SPARSE_TEXT, TESSERACT_FILTER);
+		}
+	}
+
+	void WriteTestData(cv::Mat & c, DofusHuntAnalyzer & analyzer)
+	{
+		std::string timestamp = getCurrentTimestamp();
+		std::string outputFilename = "D:/D3Hunt/test_data/output_" + timestamp;
+		// Save image for test purposes
+		if (!cv::imwrite(outputFilename + ".jpg", c)) {
+			std::cerr << "Error: Could not save image." << std::endl;
+			return;
+		}
+
+		auto s = analyzer.toString();
+		std::string filename = outputFilename + ".txt";
+
+		// Create an output file stream object
+		std::ofstream outFile(filename);
+
+		// Check if the file stream was created successfully
+		if (!outFile) {
+			std::cerr << "Error: Could not open the file " << filename << " for writing." << std::endl;
+			return;
+		}
+
+		// Write the string to the file
+		outFile << s;
+
+	}
 	
-	void SendKeys(std::vector<SHORT> keys)
+	bool looksLikePhorreur(std::string& s)
 	{
-		unsigned int size = (UINT)(keys.size() * 2);
-		INPUT* inputs = new INPUT[size];
-		unsigned int i = 0;
-		for (SHORT key : keys)
-		{
-			UINT mappedkey;
-			INPUT input;
-			mappedkey = MapVirtualKey(LOBYTE(key), 0);
-			SHORT res = GetAsyncKeyState(key);
-			input.type = INPUT_KEYBOARD;
-			input.ki.dwFlags = KEYEVENTF_SCANCODE;
-			input.ki.wScan = mappedkey;
-			*(inputs + i) = input;
-			i++;
-		}
-
-		for (SHORT key : keys)
-		{
-			UINT mappedkey;
-			INPUT input;
-			mappedkey = MapVirtualKey(LOBYTE(key), 0);
-			SHORT res = GetAsyncKeyState(key);
-			input.type = INPUT_KEYBOARD;
-			input.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-			input.ki.wScan = mappedkey;
-			*(inputs + i) = input;
-			i++;
-		}
-		SendInput(size, inputs, sizeof(INPUT));
+		if (s.find("Porreur") != std::string::npos) return true;
+		if (s.find("Phorreur") != std::string::npos) return true;
+		if (s.find("Phoreur") != std::string::npos) return true;
+		if (s.find("Poreur") != std::string::npos) return true;
+		if (s.find("orreur") != std::string::npos) return true;
+		if (s.find("Pnorreur") != std::string::npos) return true;
+		return false;
 	}
-	void SendKeyPress(SHORT key)
-	{
-		UINT mappedkey;
-		INPUT input;
-		mappedkey = MapVirtualKey(LOBYTE(key), 0);
-		SHORT res = GetAsyncKeyState(key);
-		input.type = INPUT_KEYBOARD;
-		input.ki.dwFlags = KEYEVENTF_SCANCODE;
-		input.ki.wScan = mappedkey;
-		SendInput(1, &input, sizeof(INPUT));
-	}
+	
 
-	void SendKeyRelease(SHORT key)
-	{
-		UINT mappedkey;
-		INPUT input;
-		mappedkey = MapVirtualKey(LOBYTE(key), 0);
-		SHORT res = GetAsyncKeyState(key);
-		input.type = INPUT_KEYBOARD;
-		input.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-		input.ki.wScan = mappedkey;
-		SendInput(1, &input, sizeof(INPUT));
-	}
-
-	float lint2(float a, float b, float f, float f2)
+	LONG lint2(LONG a, LONG b, LONG f, LONG f2)
 	{
 		return std::lerp(a, b, f) - std::lerp(a, b, f2);
 	}
 
-	void SendClick(cv::Rect rect, HWND hwnd)
-	{
-		POINT p;
-		GetCursorPos(&p);
-		ScreenToClient(hwnd, &p);
-		srand((UINT)time(0));
-
-		int randomX = rect.x + rand() % rect.width;
-		int randomY = rect.y + rand() % rect.height;
-
-		int max_i = 100;
-		INPUT* Inputs = new INPUT[max_i];
-		Inputs[0] = { 0 };
-
-		for (int i = 1; i < max_i; i++)
-		{
-			int calc_x = lint2(p.x, rect.x, (float)i / max_i, (float)(i - 1) / max_i);
-			int calc_y = lint2(p.y, rect.y, (float)i / max_i, (float)(i - 1) / max_i);
-			Inputs[i] = { 0 };
-			Inputs[i].type = INPUT_MOUSE;
-			Inputs[i].mi.dx = calc_x; // desired X coordinate
-			Inputs[i].mi.dy = calc_y; // desired Y coordinate
-			Inputs[i].mi.dwFlags = MOUSEEVENTF_MOVE;
-		}
-
-		Inputs[max_i - 1] = { 0 };
-		Inputs[max_i - 1].type = INPUT_MOUSE;
-		Inputs[max_i - 1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP;
-
-		SendInput(max_i-1, Inputs, sizeof(INPUT));
-		
-		SetCursorPos(randomX, randomY);
-		SendInput(1, &(Inputs[max_i - 1]), sizeof(INPUT));
-		SetCursorPos(p.x, p.y);
-
-		delete[] Inputs;
-	}
-
-	void writeText(std::string msg)
-	{
-		std::vector<INPUT> vec;
-		for (auto ch : msg)
-		{
-			SHORT key = VkKeyScan(ch);;
-			INPUT input = { 0 };
-			input.type = INPUT_KEYBOARD;
-			input.ki.dwFlags = KEYEVENTF_UNICODE;
-			input.ki.wScan = ch;
-			vec.push_back(input);
-
-			input.ki.dwFlags |= KEYEVENTF_KEYUP;
-			vec.push_back(input);
-		}
-		SendInput(vec.size(), vec.data(), sizeof(INPUT));
-	}
+#pragma optimize("", on)
+	
 	void travelTo(cv::Point point)
 	{
 		using namespace std::literals;
@@ -186,15 +142,21 @@ SimpleCapture::SimpleCapture(
 	m_d3dDevice = GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
 	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
-	m_framePool = winrt::Direct3D11CaptureFramePool::Create(m_device, m_pixelFormat, 2, m_item.Size());
+	m_framePool = winrt::Direct3D11CaptureFramePool::Create(m_device, m_pixelFormat, 1, m_item.Size());
+	mT = std::chrono::seconds(1);
 	m_session = m_framePool.CreateCaptureSession(m_item);
+	initTesseractAPI();
 	m_framePool.FrameArrived({ this, &SimpleCapture::OnFrameArrived });
+	mTopLeftDiff = processMonitors();
 }
 
 void SimpleCapture::StartCapture()
 {
 	CheckClosed();
+	m_session.IsCursorCaptureEnabled(false);
+
 	m_session.StartCapture();
+	/*m_session.MinUpdateInterval(mT);*/
 }
 
 
@@ -236,15 +198,17 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 
 	ID3D11Texture2D* stagingTexture = nullptr;
 	m_d3dDevice.get()->CreateTexture2D(&desc, nullptr, &stagingTexture);
-
+	if (!stagingTexture) return false;
 	auto frameSurface = GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
 	m_d3dContext->CopyResource(stagingTexture, frameSurface.get());
 
 	D3D11_MAPPED_SUBRESOURCE mappedTex;
 	m_d3dContext->Map(stagingTexture, 0, D3D11_MAP_READ, 0, &mappedTex);
 	m_d3dContext->Unmap(stagingTexture, 0);
-
-	c = cv::Mat(desc.Height, desc.Width, CV_8UC4, mappedTex.pData, mappedTex.RowPitch).clone();
+	cv::Mat cc = cv::Mat(desc.Height, desc.Width, CV_8UC4, mappedTex.pData, mappedTex.RowPitch);
+	//cv::imshow("test", cc);
+	//cv::waitKey(0);
+	c = cc.clone();
 	stagingTexture->Release();
 
 	DXGI_PRESENT_PARAMETERS presentParameters = { 0 };
@@ -254,28 +218,32 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 		m_framePool.Recreate(
 			m_device,
 			winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
-			2,
+			1,
 			m_lastSize);
 	}
 	return true;
 }
 
 
-
+#pragma optimize("", off) 
 void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sender, winrt::IInspectable const&)
 {
+	if (mProcessingFrame)
+	{
+		return;
+	}
+	EventRAII ev(*this);
 	cv::Mat c;
 	bool ok = getNextFrame(c, sender);
 	if (!ok || c.empty())
 	{
 		return;
 	}
-	if (mProcessingFrame)
-		return;
-	EventRAII ev(*this);
+
 	State previousState = mState;
-	DofusHuntAnalyzer analyzer(c);
-	ev.setImage(analyzer.getDebugImage());
+	DofusHuntAnalyzer analyzer(c, gTesseractAPI);
+
+	//ev.setImage(analyzer.getDebugImage());
 	bool hunt_started = analyzer.interfaceFound();
 	if (!hunt_started)
 	{
@@ -285,13 +253,56 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	{
 		RETURN_SET_STATE(State::StartHunt);
 	}
+
+	if (analyzer.isHuntFinished())
+	{
+		RETURN_SET_STATE(State::ClickFight);
+		Close();
+	}
+
+	if (analyzer.isStepFinished() && previousState != State::ClickStep)
+	{
+		RETURN_SET_STATE(State::ClickStep);
+	}
+	if (previousState == State::ClickStep)
+	{
+		if (mCurrentStep == -1)
+		{
+			mCurrentStep = analyzer.getHuntStep();
+		}
+
+		if (mCurrentStep + 1 != analyzer.getHuntStep())
+		{
+			RETURN_SET_STATE(previousState);
+		}
+		mCurrentStep = -1;
+		RETURN_SET_STATE(State::StartHunt);
+	}
+	else if (previousState == State::ClickLastHint)
+	{
+		bool is_checked = analyzer.isHintChecked(mCurrentHintValidation);
+		if (!is_checked)
+		{
+			RECT r;
+			cv::Rect curr = mCurrentHintValidation.load();
+			r.left = curr.x;
+			r.right = curr.x + curr.width;
+			r.top = curr.y;
+			r.bottom = curr.y + curr.height;
+			SendClick(r, mHWND);
+			Sleep(3000);
+			RETURN_SET_STATE(previousState);
+		}
+
+		mCurrentHintValidation = cv::Rect();
+		RETURN_SET_STATE(State::StartHunt);
+	}
 	// Process travelling to target position ...
-	if (previousState == State::WaitingToReachHuntPostion ||
-		previousState == State::WaitingToReachHintPostion ||
-		previousState == State::WaitingToReachPhorreurPostion)
+	else if (previousState == State::WaitingToReachHuntPostion ||
+		previousState == State::WaitingToReachHintPostion)
 	{
 		// Target not reached, keep waiting ...
-		if (analyzer.getCurrentPosition() != mTargetPosition)
+		if (analyzer.getCurrentPosition() != mTargetPosition.load())
 		{
 			RETURN_SET_STATE(previousState);
 		}
@@ -303,40 +314,51 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		}
 		else if (previousState == State::WaitingToReachHintPostion)
 		{
-			// Validate hint
-			SendClick(analyzer.getLastHintValidationPosition(), mHWND);
-			RETURN_SET_STATE(State::StartHunt);
-		}
-		else if (previousState == State::WaitingToReachPhorreurPostion)
-		{
-			// Press on Z to display Phorreur
-			SendKeyPress(Z);
-			RETURN_SET_STATE(State::SearchPhorreur);
+			mCurrentHintValidation = analyzer.getLastHintValidationPosition();
+			RETURN_SET_STATE(State::ClickLastHint);
 		}
 	}
-	if (previousState == State::SearchPhorreur)
+	else if (previousState == State::WaitingToReachPhorreurPostion)
 	{
-		State phorreur_state = State::NoHunt;
-		if (analyzer.isPhorreurFound())
-		{
-			// Validate hint
-			SendClick(analyzer.getLastHintValidationPosition(), mHWND);
-			phorreur_state = State::StartHunt;
-		}
-		else
-		{
-			int direction = analyzer.getLastHintDirection();
-			// Travel 1 map in direction
-			SendKeys({ CTRL, ARROW_UP });
-			// TODO: Make direction a vector
-			// mTargetPosition = analyzer.getCurrentPosition() + direction;
-			phorreur_state = State::WaitingToReachPhorreurPostion;
-		}
-		// TODO: Release Z press, could be done via signal?
-		SendKeyRelease(Z);
-		RETURN_SET_STATE(phorreur_state);
+		// Press on Z to display Phorreur
+		SendKeyPress(Z);
+		mCurrentHintValidation = analyzer.getLastHintValidationPosition();
+		RETURN_SET_STATE(State::SearchPhorreur);
 	}
-	if (previousState == State::StartHunt)
+	else if (previousState == State::SearchPhorreur)
+	{
+		// Validate hint
+		bool is_checked = analyzer.isHintChecked(mCurrentHintValidation);
+		if (!is_checked)
+		{
+			//SendClick(current, mHWND);
+			//Sleep(3);
+			RETURN_SET_STATE(previousState);
+		}
+		SendKeyRelease(Z);
+		mCurrentHintValidation = cv::Rect();
+		RETURN_SET_STATE(State::StartHunt);
+		//State phorreur_state = State::NoHunt;
+		//if (analyzer.isPhorreurFound())
+		//{
+		//	// Validate hint
+		//	//SendClick(analyzer.getLastHintValidationPosition(), mHWND);
+		//	phorreur_state = State::StartHunt;
+		//}
+		//else
+		//{
+		//	int direction = analyzer.getLastHintDirection();
+		//	// Travel 1 map in direction
+		//	SendKeys({ CTRL, ARROW_UP });
+		//	// TODO: Make direction a vector
+		//	// mTargetPosition = analyzer.getCurrentPosition() + direction;
+		//	phorreur_state = State::WaitingToReachPhorreurPostion;
+		//}
+		//// TODO: Release Z press, could be done via signal?
+		//SendKeyRelease(Z);
+		//RETURN_SET_STATE(phorreur_state);
+	}
+	else if (previousState == State::StartHunt)
 	{
 		if (analyzer.getHuntStep() == 1 &&
 			analyzer.getLastHintIndex() == 0 &&
@@ -345,17 +367,18 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 			mTargetPosition = analyzer.getStartPosition();
 			RETURN_SET_STATE(State::WaitingToReachHuntPostion);
 		}
+
 		// Retrieve infos on the hunt
 		auto [x, y] = analyzer.getCurrentPosition();
 		std::string hint = analyzer.getLastHint();
-		DofusDB::DBInfos infos = { x, y, analyzer.getLastHintDirection(), 0,  hint };
-
-		if (hint.find("Phorreur") != std::string::npos)
+		if (looksLikePhorreur(hint))
 		{
 			mPhorreurType = hint;
-			RETURN_SET_STATE(State::SearchPhorreur);
+			RETURN_SET_STATE(State::WaitingToReachPhorreurPostion);
 		}
 
+		WriteTestData(c, analyzer);
+		DofusDB::DBInfos infos = { x, y, analyzer.getLastHintDirection(), 0,  hint };
 		mSocket->send(DofusDB::DBInfos2json(infos).c_str());
 		char* out;
 		int size;
@@ -370,9 +393,46 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		RETURN_SET_STATE(State::WaitingToReachHintPostion);
 	}
 }
+struct sEnumInfo
+{
+	int x_primaryscreen_diff = 0;
+	int y_primaryscreen_diff = 0;
+};
 
-inline SimpleCapture::EventRAII::EventRAII(SimpleCapture& sc) : mCapture(sc) { 
-	sc.setProcessingFrame(true); 
+//BOOL CALLBACK GetMonitorByIndex(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
+//{
+//
+//
+//	sEnumInfo* info = (sEnumInfo*)dwData;
+//	MONITORINFOEX monitorInfo;
+//	::ZeroMemory(&monitorInfo, sizeof(monitorInfo));
+//	monitorInfo.cbSize = sizeof(monitorInfo);
+//
+//	BOOL res = ::GetMonitorInfo(hMonitor, &monitorInfo);
+//	int left_x = monitorInfo.rcMonitor.left;
+//	int top_y = monitorInfo.rcMonitor.top;
+//
+//	if (info->x_primaryscreen_diff > left_x)
+//	{
+//		info->x_primaryscreen_diff = left_x;
+//	}
+//
+//	if (info->y_primaryscreen_diff > top_y)
+//	{
+//		info->y_primaryscreen_diff = top_y;
+//	}
+//	return TRUE;
+//}
+POINT SimpleCapture::processMonitors()
+{
+	sEnumInfo infos;
+
+	//EnumDisplayMonitors(NULL, NULL, GetMonitorByIndex, (LPARAM)&infos);
+	return { infos.x_primaryscreen_diff, infos.y_primaryscreen_diff };
+}
+#pragma optimize("", on) 
+inline SimpleCapture::EventRAII::EventRAII(SimpleCapture& sc) : mCapture(sc) {
+	sc.setProcessingFrame(true);
 }
 
 void SimpleCapture::EventRAII::setImage(cv::Mat* image)
@@ -382,7 +442,7 @@ void SimpleCapture::EventRAII::setImage(cv::Mat* image)
 }
 
 inline SimpleCapture::EventRAII::~EventRAII() {
-	if(mImage)
+	if (mImage)
 	{
 		//cv::imshow("RAII", *mImage);
 		//cv::waitKey(0);

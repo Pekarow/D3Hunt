@@ -4,15 +4,16 @@
 #include <cctype>
 #include <math.h>
 #include <cmath>
+#include <regex>
+#include <tesseract/baseapi.h>
 using namespace std;
 using namespace cv;
 
 namespace
 {
-	static tesseract::TessBaseAPI* gTesseractAPI = nullptr;
 	const Scalar INTERFACE_LOWER = Scalar(103, 0, 41);
 	const Scalar INTERFACE_UPPER = Scalar(146, 255, 255);
-
+	
 	const Scalar CURRENT_POS_LOWER = Scalar(0, 0, 10);
 	const Scalar CURRENT_POS_UPPER = Scalar(0, 0, 255);
 
@@ -24,7 +25,8 @@ namespace
 
 	const double X_DIRECTION_RATIO = .1;
 	const double X_INPROGRESS_RATIO = .25;
-
+	const string TESSERACT_FILTER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-";
+	
 	// trim from start (in place)
 	inline void ltrim(std::string& s) {
 		s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
@@ -91,49 +93,57 @@ namespace
 		vector<Point> inner_contour = { top_left.second  ,  top_right.second  ,  bot_left.second  ,  bot_right.second };
 		return cv::boundingRect(inner_contour);
 	}
+
+	
 	string getTextFromImage(Mat& image, tesseract::TessBaseAPI* tess, bool remove_endl = true, bool requires_processing = true)
 	{
 		cv::Mat grey;
 		cv::cvtColor(image, grey, cv::ColorConversionCodes::COLOR_BGR2GRAY);
-
-
-		Mat blur;
-		cv::GaussianBlur(grey, blur, Size(9, 9), 0);
-
-
-		Mat adaptive_thresh;
-		cv::adaptiveThreshold(blur, adaptive_thresh, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 11, 5);
-		// Dilate to combine adjacent text contours
-		Mat kernel = cv::getStructuringElement(MORPH_RECT, Size(5, 5));
-		Mat dilate;
-		cv::dilate(adaptive_thresh, dilate, kernel, Point(-1, -1), 4);
-
-		// Find contours, highlight text areas, and extract ROIs
-		vector<vector<Point>> cnts;
-		vector<Vec4i> hierarchy;
-
-		cv::findContours(dilate, cnts, hierarchy, RETR_LIST, CHAIN_APPROX_SIMPLE);
 		vector<Rect> valid_text_areas;
-		for (const auto& c : cnts)
+		if (requires_processing)
 		{
-			double area = cv::contourArea(c);
-			if (area < 1000)
-				continue;
-			Rect r = cv::boundingRect(c);
-			valid_text_areas.push_back(r);
-			//cv::rectangle(image, r, Scalar(255, 0, 255), 1);
+			Mat blur;
+			cv::GaussianBlur(grey, blur, Size(9, 9), 0);
+
+
+			Mat adaptive_thresh;
+			cv::adaptiveThreshold(blur, adaptive_thresh, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 11, 5);
+			// Dilate to combine adjacent text contours
+			Mat kernel = cv::getStructuringElement(MORPH_RECT, Size(5, 5));
+			Mat dilate;
+			cv::dilate(adaptive_thresh, dilate, kernel, Point(-1, -1), 4);
+
+			// Find contours, highlight text areas, and extract ROIs
+			vector<vector<Point>> cnts;
+			vector<Vec4i> hierarchy;
+
+			cv::findContours(dilate, cnts, hierarchy, RETR_LIST, CHAIN_APPROX_SIMPLE);
+
+			for (const auto& c : cnts)
+			{
+				double area = cv::contourArea(c);
+				if (area < 1000)
+					continue;
+				Rect r = cv::boundingRect(c);
+				valid_text_areas.push_back(r);
+				//cv::rectangle(image, r, Scalar(255, 0, 255), 1);
+			}
 		}
+		else
+		{
+			valid_text_areas.push_back(Rect(0, 0, grey.cols, grey.rows));
+		}
+
 
 		std::string output;
 		for (const auto& text_area : valid_text_areas)
 		{
 			Mat sub_area(grey, text_area);
-			if (requires_processing)
-			{
-				cv::threshold(sub_area, sub_area, 0, 255, THRESH_OTSU | THRESH_BINARY_INV);
-			}
+
+			cv::threshold(sub_area, sub_area, 0, 255, THRESH_OTSU | THRESH_BINARY_INV);
+
 			// recognize text
-			tess->SetImage(sub_area.data, sub_area.cols, sub_area.rows, 1, sub_area.step);
+			tess->SetImage(sub_area.data, sub_area.cols, sub_area.rows, 1, (int)sub_area.step);
 			string t1(tess->GetUTF8Text());
 			if (remove_endl)
 			{
@@ -239,32 +249,24 @@ namespace
 		assert(valid_text_areas.size() == 1);
 		return valid_text_areas[0];
 	}
+
 }
 
-DofusHuntAnalyzer::DofusHuntAnalyzer(cv::Mat& image) : mImage(image)
+DofusHuntAnalyzer::DofusHuntAnalyzer(cv::Mat& image, tesseract::TessBaseAPI* tesseract_api) : mImage(image)
 {
-	mImageDebug = mImage.clone();
-	if (!gTesseractAPI)
-	{
-		gTesseractAPI = new tesseract::TessBaseAPI();
-		printf("Tesseract-ocr version: %s\n",
-			gTesseractAPI->Version());
-		// Initialize tesseract-ocr with English, without specifying tessdata path
-		if (gTesseractAPI->Init(NULL, "eng")) {
-			fprintf(stderr, "Could not initialize tesseract.\n");
-			assert(false);
-			return;
-		}
-		gTesseractAPI->SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
-		//string whiteList = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-";
-		//gTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
-	}
+	//mImageDebug = mImage.clone();
+	mTesseractAPI = tesseract_api;
 }
 
 bool DofusHuntAnalyzer::interfaceFound()
 {
-	findInterface();
+	if (mInterfaceRect.empty())
+	{
+		findInterface();
+	}
+
 	return !mInterfaceRect.empty();
+	
 }
 
 std::pair<int, int> DofusHuntAnalyzer::getStartPosition()
@@ -317,6 +319,14 @@ int DofusHuntAnalyzer::getLastHintIndex()
 	return mLastHintIndex;
 }
 
+bool DofusHuntAnalyzer::isHintChecked(cv::Rect rect)
+{
+	cv::Mat validation(mImage, rect);
+	cv::threshold(validation, validation, 250, 255, cv::THRESH_BINARY);
+	cv::cvtColor(validation, validation, cv::ColorConversionCodes::COLOR_BGR2GRAY);
+	return (cv::countNonZero(validation) == 0);
+}
+
 int DofusHuntAnalyzer::getHuntStep()
 {
 	if (!mHuntInfosFound)
@@ -333,6 +343,15 @@ int DofusHuntAnalyzer::getMaxHuntStep()
 		initHuntInfos();
 	}
 	return mMaxStep;
+}
+
+bool DofusHuntAnalyzer::isStepFinished()
+{
+	if (!mHuntInfosFound)
+	{
+		initHuntInfos();
+	}
+	return (mLastHintIndex == mNbHint) && isHintChecked(mLastHintValidationPosition);
 }
 
 Rect DofusHuntAnalyzer::getLastHintValidationPosition()
@@ -362,22 +381,115 @@ bool DofusHuntAnalyzer::isPhorreurFound()
 	return false;
 }
 
+inline void DofusHuntAnalyzer::resetTesseractAPI(tesseract::PageSegMode mode, const std::string& whitelist)
+{
+	mTesseractAPI->SetPageSegMode(mode);
+	mTesseractAPI->SetVariable("tessedit_char_whitelist", whitelist.c_str());
+}
+
+inline string DofusHuntAnalyzer::getPreciseTextFromImage(Mat& image)
+{
+	Mat rgb;
+	cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
+
+	resetTesseractAPI(tesseract::PSM_SINGLE_CHAR, "?");
+	mTesseractAPI->SetImage(rgb.data, rgb.cols, rgb.rows, 3, (int)rgb.step);
+
+	string res = mTesseractAPI->GetUTF8Text();
+	resetTesseractAPI(tesseract::PSM_SPARSE_TEXT, TESSERACT_FILTER);
+	if (res == "?")
+	{
+		return res;
+	}
+
+	mTesseractAPI->SetImage(rgb.data, rgb.cols, rgb.rows, 3, (int)rgb.step);
+
+	res = mTesseractAPI->GetUTF8Text();
+
+
+	return res;
+}
+
+std::string DofusHuntAnalyzer::toString() const
+{
+	std::stringstream ss;
+	ss << "DofusHuntAnalyzer: \n";
+	ss << "mCurrentPositionFound: " << mCurrentPositionFound << "\n";
+	ss << "mHuntInfosFound: " << mHuntInfosFound << "\n";
+	ss << "mHuntAreaFound: " << mHuntAreaFound << "\n";
+	ss << "mInterfaceRect: " << mInterfaceRect << "\n";
+	ss << "mLastHintDirection: " << mLastHintDirection << "\n";
+	ss << "mLastHintIndex: " << mLastHintIndex << "\n";
+	ss << "mNbHint: " << mNbHint << "\n";
+	ss << "mLastHintValidationPosition: " << mLastHintValidationPosition << "\n";
+	ss << "mHuntArea: " << mHuntArea << "\n";
+	ss << "mCurrentStep: " << mCurrentStep << "\n";
+	ss << "mMaxStep: " << mMaxStep << "\n";
+	ss << "mStartPosition: (" << mStartPosition.first << ", " << mStartPosition.second << ")\n";
+	ss << "mCurrentPosition: (" << mCurrentPosition.first << ", " << mCurrentPosition.second << ")\n";
+	return ss.str();
+}
+
+inline DofusHuntAnalyzer DofusHuntAnalyzer::fromString(const std::string& str)
+{
+	std::istringstream iss(str);
+	// Create empty analyzer
+	DofusHuntAnalyzer analyzer(cv::Mat(), nullptr);
+
+	std::string dummy;
+	iss >> dummy >> dummy; // Skip "DofusHuntAnalyzer:"
+
+	iss >> dummy >> analyzer.mCurrentPositionFound;
+	iss >> dummy >> analyzer.mHuntInfosFound;
+	iss >> dummy >> analyzer.mHuntAreaFound;
+
+	// Parsing cv::Rect (x, y, width, height)
+	int x, y, width, height;
+	iss >> dummy >> x >> y >> width >> height;
+	analyzer.mInterfaceRect = cv::Rect(x, y, width, height);
+
+	iss >> dummy >> analyzer.mLastHintDirection;
+	iss >> dummy >> analyzer.mLastHintIndex;
+	iss >> dummy >> analyzer.mNbHint;
+
+	// Parsing cv::Rect (x, y, width, height)
+	iss >> dummy >> x >> y >> width >> height;
+	analyzer.mLastHintValidationPosition = cv::Rect(x, y, width, height);
+
+	// Parsing cv::Rect (x, y, width, height)
+	iss >> dummy >> x >> y >> width >> height;
+	analyzer.mHuntArea = cv::Rect(x, y, width, height);
+
+	iss >> dummy >> analyzer.mCurrentStep;
+	iss >> dummy >> analyzer.mMaxStep;
+
+	// Parsing std::pair<int, int>
+	int first, second;
+	iss >> dummy >> dummy >> first >> dummy >> second;
+	analyzer.mStartPosition = std::make_pair(first, second);
+
+	iss >> dummy >> dummy >> first >> dummy >> second;
+	analyzer.mCurrentPosition = std::make_pair(first, second);
+
+	return analyzer;
+}
+
 void DofusHuntAnalyzer::initHuntInfos()
 {
 	if (!interfaceFound()) return;
 	Mat _interface(mImage, mInterfaceRect);
 	vector<Rect> rects = FindRectInImage(_interface, HINT_LOWER, HINT_UPPER, "", mInterfaceRect.width - 10);
-	for (auto r : rects)
-	{
-		rectangle(_interface, r, Scalar(0, 255, 0));
-	}
+	//for (auto r : rects)
+	//{
+	//	rectangle(_interface, r, Scalar(0, 255, 0));
+	//}
 	// order by y axis, meaning the order will be from top rect to bottom
 	std::sort(rects.begin(), rects.end(), [](Rect p1, Rect p2) { return p1.y < p2.y; });
 	// get step infos
 	Rect step_rect = rects[0];
 	Mat step(_interface, step_rect);
 
-	std::string step_s = getTextFromImage(step, gTesseractAPI);
+	std::string step_s = getPreciseTextFromImage(step);
 	int index = (int)step_s.find("/");
 	mCurrentStep = std::stoi(step_s.substr(index - 1, index));
 	mMaxStep = std::stoi(step_s.substr(index + 1, index + 2));
@@ -385,7 +497,9 @@ void DofusHuntAnalyzer::initHuntInfos()
 	// get start position infos
 	Rect start_rect = rects[1];
 	Mat start(_interface, start_rect);
-	std::string start_s = getTextFromImage(start, gTesseractAPI);
+	Rect sub_start_r = Rect(1, 1, start.cols - 1, (int)(start.rows / 2) - 1);
+	Mat sub_start(start, sub_start_r);
+	std::string start_s = getPreciseTextFromImage(start);
 	int start_index = (int)start_s.find("[");
 	int end_index = (int)start_s.find("]");
 	string pos = start_s.substr(start_index + 1, end_index - start_index - 1);
@@ -394,7 +508,7 @@ void DofusHuntAnalyzer::initHuntInfos()
 	string pos_x = pos.substr(0, hint_index);
 	string pos_y = pos.substr(hint_index + 1, pos.size() - hint_index);
 	mStartPosition = make_pair(std::stoi(pos_x), std::stoi(pos_y));
-
+	mNbHint = (int)rects.size() - 3;
 	// get hint infos
 	for (int i = (int)rects.size() - 1; i > 1; i--)
 	{
@@ -405,9 +519,10 @@ void DofusHuntAnalyzer::initHuntInfos()
 		Rect hint_rect(offset_start, _rect.y, _rect.width - offset_end - offset_start, _rect.height);
 		Mat hint(_interface, hint_rect);
 		// Process hints in reverse
-		std::string hint_s = getTextFromImage(hint, gTesseractAPI);
-		if (hint_s.size() > 2)
+		std::string hint_s = getPreciseTextFromImage(hint);
+		if (hint_s != "?" && hint_s.size() > 2)
 		{
+			std::replace(hint_s.begin(), hint_s.end(), '\n', ' ');
 			mLastHint = hint_s;
 
 			Rect validation_rect(_rect.width - offset_start, _rect.y, offset_start, _rect.height);
@@ -423,6 +538,7 @@ void DofusHuntAnalyzer::initHuntInfos()
 			mLastHintIndex = i - 2;
 			break;
 		}
+
 	}
 	mHuntInfosFound = true;
 }
@@ -434,22 +550,22 @@ void DofusHuntAnalyzer::findInterface()
 	{
 		float ratio = (float)(r.height) / r.width;
 
-		if (ratio < .7 || ratio > 3)
+		if (ratio < .5 || ratio > 3)
 		{
 			continue;
 		}
-		//rectangle(mImage, r, Scalar(0, 255, 0), 1);
-		Mat sub(mImage, r);
-		vector<Rect> founds = FindRectInImage(sub, TITLE_LOWER, TITLE_UPPER, TITLE_S);
-		Rect title_rect;
-		for (const auto& found : founds)
+		Rect sub_rect(r.x, r.y, r.width, (int)r.height * .1);
+		Mat sub(mImage, sub_rect);
+		std::string t1 = getPreciseTextFromImage(sub);
+		if(t1.find(TITLE_S) != std::string::npos)
 		{
-			if (found.y < 10 && found.x < 10)
-			{
-				mInterfaceRect = r;
-				rectangle(mImageDebug, mInterfaceRect, Scalar(0, 255, 0), 1);
-				return;
-			}
+			mInterfaceRect = r;
+			break;
+		}
+		else if (t1.find("CHASSE AUX TRÉSORS") != std::string::npos)
+		{
+			mInterfaceRect = r;
+			break;
 		}
 	}
 }
@@ -496,7 +612,7 @@ void DofusHuntAnalyzer::findHuntArea()
 	}
 	Rect r = cv::boundingRect(final_contours[0]);
 	Rect inner_rect = findInnerRect(final_contours[0], Point(mImage.cols / 2, mImage.rows / 2));
-	cv::rectangle(mImageDebug, inner_rect, Scalar(100, 255, 255));
+	//cv::rectangle(mImageDebug, inner_rect, Scalar(100, 255, 255));
 	mHuntArea = inner_rect;
 	mHuntAreaFound = true;
 }
@@ -521,7 +637,7 @@ void DofusHuntAnalyzer::findCurrentPos()
 	Mat blur;
 	cv::blur(thresh, blur, Size(3, 3));
 	// Dilate to combine adjacent text contours
-	Mat kernel = cv::getStructuringElement(MORPH_RECT, Size(7, 3));
+	Mat kernel = cv::getStructuringElement(MORPH_RECT, Size(7, 5));
 	Mat dilate;
 	cv::dilate(blur, dilate, kernel, Point(-1, -1), 4);
 
@@ -540,7 +656,7 @@ void DofusHuntAnalyzer::findCurrentPos()
 		if (r.width < 10 || r.height < 10) continue;
 		if (r.width > 1000 || r.height > 1000) continue;
 
-		//rectangle(mImage, r, Scalar(0, 0, 244));
+		//rectangle(mDebugImage, r, Scalar(0, 0, 244));
 		float ratio = (float)(r.height) / r.width;
 
 		if (ratio < .1 || ratio > 10) continue;
@@ -552,21 +668,48 @@ void DofusHuntAnalyzer::findCurrentPos()
 			top_left_d.second = r;
 		}
 	}
+	
 	auto top_left = top_left_d.second;
+	//Rect sub_rect(top_left.x, top_left.y + (int)(top_left.height / 2), (int)(top_left.width / 2) - 1, (int)(top_left.height / 2) - 2);
 	Mat sub_mat(mImage, top_left);
+
+	cv::Mat sub_hsv;
+	cv::cvtColor(sub_mat, sub_hsv, cv::ColorConversionCodes::COLOR_BGR2HSV);
+
+	cv::Mat sub_mask;
+	cv::inRange(sub_hsv, Scalar(0,0,0), Scalar(179, 125, 255), sub_mask);
+
+	cv::Mat sub_res;
+	cv::bitwise_and(sub_mat, sub_mat, sub_res, mask = sub_mask);
 	string whiteList = "0123456789 -,";
-	//gTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
-	string top_left_s = getTextFromImage(sub_mat, gTesseractAPI, false, true);
-	//gTesseractAPI->SetVariable("tessedit_char_whitelist", "");
-	cv::rectangle(mImageDebug, top_left, Scalar(100, 100, 255), 1);
-	int ind = (int)top_left_s.find("\n");
-	string sub_pos = top_left_s.substr(ind);
-	trim(sub_pos);
-	int space = (int)sub_pos.find(" - ");
-	string pos = sub_pos.substr(0, space);
-	int coma = (int)pos.find(',');
-	int x_pos = std::stoi(pos.substr(0, coma));
-	int y_pos = std::stoi(pos.substr(coma + 1));
+	//mTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
+	string top_left_s = getPreciseTextFromImage(sub_res);
+	std::string target = "\nO";
+	std::string replacement = "\n0";
+	size_t pos = top_left_s.find(target);
+
+	// Check if the target substring is found
+	if (pos != std::string::npos) {
+		top_left_s.replace(pos, target.length(), replacement);
+	}
+	const std::regex re("([-]?[0-9]{1,2})");
+	std::smatch match_result;
+
+	string::const_iterator searchStart(top_left_s.cbegin());
+
+	std::regex_search(searchStart, top_left_s.cend(), match_result, re);
+	int x_pos = std::stoi(match_result[0]);
+	searchStart = match_result.suffix().first;
+	std::regex_search(searchStart, top_left_s.cend(), match_result, re);
+	int y_pos = std::stoi(match_result[0]);
+
+	//mTesseractAPI->SetVariable("tessedit_char_whitelist", "");
+	//cv::rectangle(mImageDebug, sub_rect, Scalar(100, 100, 255), 1);
+	//int ind = (int)top_left_s.find("\n");
+	//string sub_pos = top_left_s.substr(ind);
+
+	
+	//int y_pos = std::stoi(words[1]);
 	mCurrentPosition = { x_pos, y_pos };
 	mCurrentPositionFound = true;
 }
@@ -578,6 +721,8 @@ vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, 
 	{
 		return valid_contours;
 	}
+
+
 	vector<vector<Point>> to_draw;
 	cv::Mat hsv;
 	cv::cvtColor(image, hsv, cv::ColorConversionCodes::COLOR_BGR2HSV);
@@ -627,7 +772,7 @@ vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, 
 
 bool DofusHuntAnalyzer::containsText(Mat& image, string text)
 {
-	std::string t1 = getTextFromImage(image, gTesseractAPI);
+	std::string t1 = getTextFromImage(image, mTesseractAPI);
 	return t1.find(text) != std::string::npos;
 }
 

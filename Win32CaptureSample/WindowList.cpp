@@ -70,9 +70,10 @@ bool isDofusExe(HWND hwnd)
     HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, id);
     QueryFullProcessImageNameW(hProc, 0, path, &size);
     CloseHandle(hProc);
+    //if constexpr( ALL_WINDOWS == 1)
+        //return true; 
     auto ws = std::wstring(path);
     return ws.find(L"Dofus.exe") != std::wstring::npos;
-    
 }
 WindowList::WindowList()
 {

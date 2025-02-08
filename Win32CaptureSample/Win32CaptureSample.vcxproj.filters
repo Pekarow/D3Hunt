@@ -26,6 +26,9 @@
       <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="CaptureUtils.cpp">
+      <Filter>App\src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ClientSocket.h">
@@ -51,6 +54,9 @@
     </ClInclude>
     <ClInclude Include="pch.h">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="CaptureUtils.h">
+      <Filter>App\src</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

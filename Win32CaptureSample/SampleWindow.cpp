@@ -103,7 +103,7 @@ LRESULT SampleWindow::MessageHandler(UINT const message, WPARAM const wparam, LP
         case CBN_SELCHANGE:
             {
                 auto index = SendMessageW(hwnd, CB_GETCURSEL, 0, 0);
-                if (hwnd == m_windowComboBox)
+                if (hwnd == m_windowComboBox && index != -1)
                 {
                     auto window = m_windows->GetCurrentWindows()[index];
                     auto item = m_app->TryStartCaptureFromWindowHandle(window.WindowHandle);

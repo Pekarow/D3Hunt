@@ -125,8 +125,19 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>Windowscodecs.lib;windowsapp.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Shcore.lib;Windowscodecs.lib;windowsapp.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)Win32CaptureSample\eng.traineddata" "$(TargetDir)eng.traineddata"
+copy "$(SolutionDir)Win32CaptureSample\fra.traineddata" "$(TargetDir)fra.traineddata"
+copy "$(SolutionDir)Win32CaptureSample\DofusHunt.bat" "$(TargetDir)DofusHunt.bat"
+mkdir $(TargetDir)python-server
+copy "$(SolutionDir)Win32CaptureSample\python-server\chromedriver.exe" "$(TargetDir)python-server\chromedriver.exe"
+copy "$(SolutionDir)Win32CaptureSample\python-server\DofusDB.py" "$(TargetDir)python-server\DofusDB.py"
+copy "$(SolutionDir)Win32CaptureSample\python-server\server.py" "$(TargetDir)python-server\server.py"
+copy "$(SolutionDir)Win32CaptureSample\python-server\requirements.txt" "$(TargetDir)python-server\requirements.txt"
+</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -149,6 +160,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="App.cpp" />
+    <ClCompile Include="CaptureUtils.cpp" />
     <ClCompile Include="ClientSocket.cpp" />
     <ClCompile Include="DofusDBUtils.cpp" />
     <ClCompile Include="DofusHuntAnalyzer.cpp" />
@@ -160,6 +172,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
+    <ClInclude Include="CaptureUtils.h" />
     <ClInclude Include="ClientSocket.h" />
     <ClInclude Include="DofusDBUtils.h" />
     <ClInclude Include="DofusHuntAnalyzer.h" />

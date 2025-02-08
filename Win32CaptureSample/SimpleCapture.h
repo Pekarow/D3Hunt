@@ -9,6 +9,9 @@ enum class State
     WaitingToReachHintPostion,
     StartHunt,
     SearchPhorreur,
+    ClickLastHint,
+    ClickStep,
+    ClickFight,
     Fight,
     Ended
 };
@@ -59,15 +62,18 @@ private:
     winrt::com_ptr<ID3D11Device> m_d3dDevice{ nullptr };
     winrt::com_ptr<ID3D11DeviceContext> m_d3dContext{ nullptr };
     winrt::Windows::Graphics::DirectX::DirectXPixelFormat m_pixelFormat;
-
+    POINT processMonitors();
+    POINT mTopLeftDiff;
     std::atomic<bool> m_closed = false;
-    State mState = State::NoHunt;
-    std::pair<int, int> mTargetPosition;
+    std::atomic < State > mState = State::NoHunt;
+    std::atomic < std::pair<int, int>> mTargetPosition;
     std::string mPhorreurType;
     ClientSocket * mSocket = nullptr;
     HWND mHWND;
     std::atomic<bool> mProcessingFrame = false;
-
+    std::atomic < cv::Rect>  mCurrentHintValidation;
+    std::atomic<int> mCurrentStep = -1;
+    winrt::Windows::Foundation::TimeSpan mT;
     friend class EventRAII;
     class EventRAII
     {

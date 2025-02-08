@@ -19,11 +19,14 @@ def handle_client(conn, address):
 
         if "exit" in res and res["exit"] == 1:
             break
-
-        ddb.set_x_position(res["x"])
-        ddb.set_y_position(res["y"])
-        ddb.set_direction(res["direction"])
-        ddb.set_hint(res["hint"])
+        tries = 0
+        while tries < 10:
+            try:
+                ddb.run(**res)
+                break
+            except:
+                tries += 1
+                continue
 
         print(f"From connected user: {data}")
         new_data = "/".join(ddb.get_hint_position())
@@ -35,11 +38,11 @@ def server_program():
     host = socket.gethostname()
     port = 5000  # Port number above 1024
     print(f"Server hostname: {host}")
-
+    
     server_socket = socket.socket()  # Create socket instance
     server_socket.bind((host, port))  # Bind host address and port together
     server_socket.listen(1000)  # Configure the server to listen for connections
-
+    
     try:
         while True:
             conn, address = server_socket.accept()  # Accept new connection
