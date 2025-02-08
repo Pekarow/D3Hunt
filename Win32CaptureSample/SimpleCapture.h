@@ -1,6 +1,7 @@
 #pragma once
 #include "ClientSocket.h"
 #include <opencv2/opencv.hpp>
+class DofusHuntAnalyzer;
 enum class State
 {
     NoHunt,
@@ -10,6 +11,7 @@ enum class State
     StartHunt,
     SearchPhorreur,
     ClickLastHint,
+    LastHintClicked,
     ClickStep,
     ClickFight,
     Fight,
@@ -74,6 +76,7 @@ private:
     std::atomic < cv::Rect>  mCurrentHintValidation;
     std::atomic<int> mCurrentStep = -1;
     winrt::Windows::Foundation::TimeSpan mT;
+    std::shared_ptr<DofusHuntAnalyzer> mAnalyzer = nullptr;
     friend class EventRAII;
     class EventRAII
     {

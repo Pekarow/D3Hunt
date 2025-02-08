@@ -51,6 +51,10 @@ public:
 			mStartPosition == other.mStartPosition &&
 			mCurrentPosition == other.mCurrentPosition;
 	}
+	void createAnalyzerFromExistingData(const DofusHuntAnalyzer & other_analyzer)
+	{
+		mInterfaceRect = other_analyzer.mInterfaceRect;
+	}
 
 private:
 	void initHuntInfos();

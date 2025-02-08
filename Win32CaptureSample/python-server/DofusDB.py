@@ -31,10 +31,9 @@ class DofusDB:
         chrome_options.add_argument("--start-maximized")
         if headless:
             chrome_options.add_argument("--headless=new")
-        self.driver = uc.Chrome(options=chrome_options, use_subprocess=True)
+        self.driver = uc.Chrome(options=chrome_options, use_subprocess=False)
         self.driver.delete_all_cookies()
         self.driver.get("https://dofusdb.fr/fr/tools/treasure-hunt")
-        
     def set_x_position(self, pos: int) -> None:
         # Set position of X coordinate in browser
         elem = WebDriverWait(self.driver, 30).until(

@@ -105,10 +105,10 @@ namespace
 	}
 	
 
-	LONG lint2(LONG a, LONG b, LONG f, LONG f2)
-	{
-		return std::lerp(a, b, f) - std::lerp(a, b, f2);
-	}
+	//LONG lint2(LONG a, LONG b, LONG f, LONG f2)
+	//{
+	//	return std::lerp(a, b, f) - std::lerp(a, b, f2);
+	//}
 
 #pragma optimize("", on)
 	
@@ -176,6 +176,8 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 {
 	auto newSize = false;
 	auto frame = sender.TryGetNextFrame();
+	if (frame == NULL)
+		return false;
 	auto frameContentSize = frame.ContentSize();
 
 	D3D11_TEXTURE2D_DESC desc;
@@ -228,20 +230,35 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 #pragma optimize("", off) 
 void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sender, winrt::IInspectable const&)
 {
+	cv::Mat c;
 	if (mProcessingFrame)
 	{
+		getNextFrame(c, sender);
 		return;
 	}
 	EventRAII ev(*this);
-	cv::Mat c;
-	bool ok = getNextFrame(c, sender);
-	if (!ok || c.empty())
+	cv::Mat previous_valid;
+
+	bool ok = true;
+	// Consume maximum of pending frames in pool
+	while (ok)
+	{
+		previous_valid = c;
+		ok = getNextFrame(c, sender);
+	}
+		
+	if (c.empty())
 	{
 		return;
 	}
 
 	State previousState = mState;
-	DofusHuntAnalyzer analyzer(c, gTesseractAPI);
+	std::shared_ptr<DofusHuntAnalyzer> analyzer_ptr(new DofusHuntAnalyzer(c, gTesseractAPI));
+	DofusHuntAnalyzer& analyzer = *analyzer_ptr;
+	if (mAnalyzer && mAnalyzer->interfaceFound())
+	{
+		analyzer.createAnalyzerFromExistingData(*mAnalyzer);
+	}
 
 	//ev.setImage(analyzer.getDebugImage());
 	bool hunt_started = analyzer.interfaceFound();
@@ -251,6 +268,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	}
 	else if (previousState == State::NoHunt)
 	{
+		mAnalyzer = analyzer_ptr;
 		RETURN_SET_STATE(State::StartHunt);
 	}
 
@@ -280,22 +298,30 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	}
 	else if (previousState == State::ClickLastHint)
 	{
+		RECT r;
+		cv::Rect curr = mCurrentHintValidation.load();
+		r.left = curr.x;
+		r.right = curr.x + curr.width;
+		r.top = curr.y;
+		r.bottom = curr.y + curr.height;
+		SendClick(r, mHWND);
+		RETURN_SET_STATE(State::LastHintClicked);
+	}
+	else if (previousState == State::LastHintClicked)
+	{
+		static int tries = 0;
 		bool is_checked = analyzer.isHintChecked(mCurrentHintValidation);
-		if (!is_checked)
+		if (is_checked)
 		{
-			RECT r;
-			cv::Rect curr = mCurrentHintValidation.load();
-			r.left = curr.x;
-			r.right = curr.x + curr.width;
-			r.top = curr.y;
-			r.bottom = curr.y + curr.height;
-			SendClick(r, mHWND);
-			Sleep(3000);
-			RETURN_SET_STATE(previousState);
+			mCurrentHintValidation = cv::Rect();
+			RETURN_SET_STATE(State::StartHunt);
 		}
-
-		mCurrentHintValidation = cv::Rect();
-		RETURN_SET_STATE(State::StartHunt);
+		tries++;
+		if (tries > 10)
+		{
+			RETURN_SET_STATE(State::ClickLastHint);
+		}
+		RETURN_SET_STATE(previousState);
 	}
 	// Process travelling to target position ...
 	else if (previousState == State::WaitingToReachHuntPostion ||

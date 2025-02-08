@@ -181,7 +181,10 @@ namespace
 			//cv::rectangle(image, r, Scalar(0, 255, 255), 1);
 			break;
 		}
-
+		if (valid_text_areas.size() != 1)
+		{
+			return -1;
+		}
 		assert(valid_text_areas.size() == 1);
 		Rect r = valid_text_areas[0];
 
@@ -554,7 +557,7 @@ void DofusHuntAnalyzer::findInterface()
 		{
 			continue;
 		}
-		Rect sub_rect(r.x, r.y, r.width, (int)r.height * .1);
+		Rect sub_rect(r.x, r.y, r.width, (int)(r.height * .1));
 		Mat sub(mImage, sub_rect);
 		std::string t1 = getPreciseTextFromImage(sub);
 		if(t1.find(TITLE_S) != std::string::npos)

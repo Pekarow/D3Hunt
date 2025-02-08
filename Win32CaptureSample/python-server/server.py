@@ -1,6 +1,7 @@
 import socket
-import threading
+from multiprocessing import Process, Queue
 from DofusDB import DofusDB
+import select
 import json
 from time import sleep
 
@@ -8,7 +9,11 @@ def handle_client(conn, address):
     print(f"Connection from: {address}")
     ddb = DofusDB()
     while True:
-        data = conn.recv(1024).decode()  # Receive data stream
+        conn.settimeout(600) # 10 minutes of inactivity (not quesuest made) will close the socket
+        try:
+            data = conn.recv(1024).decode()  # Receive data stream
+        except socket.timeout as e:
+            break
 
         if not data:
             sleep(1)
@@ -42,12 +47,12 @@ def server_program():
     server_socket = socket.socket()  # Create socket instance
     server_socket.bind((host, port))  # Bind host address and port together
     server_socket.listen(1000)  # Configure the server to listen for connections
-    
+
     try:
         while True:
             conn, address = server_socket.accept()  # Accept new connection
-            client_thread = threading.Thread(target=handle_client, args=(conn, address))
-            client_thread.start()
+            p = Process(target=handle_client, args=(conn, address), daemon=False)
+            p.start()
 
     except Exception as e:
         print(f"An error occurred: {e}")
