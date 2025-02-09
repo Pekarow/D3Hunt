@@ -9,7 +9,7 @@
 #include <iomanip>
 #include <fstream>
 #include "CaptureUtils.h"
-
+#include <thread>
 #define RETURN_SET_STATE(state)\
 	mState = state;\
 	return;
@@ -66,7 +66,7 @@ namespace
 		}
 	}
 
-	void WriteTestData(cv::Mat & c, DofusHuntAnalyzer & analyzer)
+	void WriteTestData(cv::Mat& c, DofusHuntAnalyzer& analyzer)
 	{
 		std::string timestamp = getCurrentTimestamp();
 		std::string outputFilename = "D:/D3Hunt/test_data/output_" + timestamp;
@@ -92,7 +92,7 @@ namespace
 		outFile << s;
 
 	}
-	
+
 	bool looksLikePhorreur(std::string& s)
 	{
 		if (s.find("Porreur") != std::string::npos) return true;
@@ -103,15 +103,13 @@ namespace
 		if (s.find("Pnorreur") != std::string::npos) return true;
 		return false;
 	}
-	
+
 
 	//LONG lint2(LONG a, LONG b, LONG f, LONG f2)
 	//{
 	//	return std::lerp(a, b, f) - std::lerp(a, b, f2);
 	//}
 
-#pragma optimize("", on)
-	
 	void travelTo(cv::Point point)
 	{
 		using namespace std::literals;
@@ -147,16 +145,15 @@ SimpleCapture::SimpleCapture(
 	m_session = m_framePool.CreateCaptureSession(m_item);
 	initTesseractAPI();
 	m_framePool.FrameArrived({ this, &SimpleCapture::OnFrameArrived });
-	mTopLeftDiff = processMonitors();
 }
 
 void SimpleCapture::StartCapture()
 {
 	CheckClosed();
 	m_session.IsCursorCaptureEnabled(false);
-
+	//m_session.MinUpdateInterval(mT);
 	m_session.StartCapture();
-	/*m_session.MinUpdateInterval(mT);*/
+
 }
 
 
@@ -226,40 +223,46 @@ bool SimpleCapture::getNextFrame(cv::Mat& c, winrt::Direct3D11CaptureFramePool c
 	return true;
 }
 
-
-#pragma optimize("", off) 
 void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sender, winrt::IInspectable const&)
 {
-	cv::Mat c;
-	if (mProcessingFrame)
-	{
-		getNextFrame(c, sender);
-		return;
-	}
-	EventRAII ev(*this);
-	cv::Mat previous_valid;
 
-	bool ok = true;
-	// Consume maximum of pending frames in pool
-	while (ok)
-	{
-		previous_valid = c;
-		ok = getNextFrame(c, sender);
-	}
-		
+	cv::Mat c;
+	bool ok = getNextFrame(c, sender);
 	if (c.empty())
 	{
 		return;
 	}
+	auto t = std::thread([this, c]
+		{
+			try
+			{
+				processFrame(c);
+			}
+			catch (...)
+			{
+				return;
+			}
+		});
+	t.detach();
 
+}
+void SimpleCapture::processFrame(cv::Mat frame)
+{
+	if (!mMutex.try_lock())
+	{
+		return;
+	}
+	if (mProcessingFrame)
+		return;
+	EventRAII ev(*this);
 	State previousState = mState;
-	std::shared_ptr<DofusHuntAnalyzer> analyzer_ptr(new DofusHuntAnalyzer(c, gTesseractAPI));
+	std::shared_ptr<DofusHuntAnalyzer> analyzer_ptr(new DofusHuntAnalyzer(frame, gTesseractAPI));
 	DofusHuntAnalyzer& analyzer = *analyzer_ptr;
 	if (mAnalyzer && mAnalyzer->interfaceFound())
 	{
 		analyzer.createAnalyzerFromExistingData(*mAnalyzer);
 	}
-
+	static int click_tries = 0;
 	//ev.setImage(analyzer.getDebugImage());
 	bool hunt_started = analyzer.interfaceFound();
 	if (!hunt_started)
@@ -305,19 +308,19 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		r.top = curr.y;
 		r.bottom = curr.y + curr.height;
 		SendClick(r, mHWND);
+		click_tries = 0;
 		RETURN_SET_STATE(State::LastHintClicked);
 	}
 	else if (previousState == State::LastHintClicked)
 	{
-		static int tries = 0;
 		bool is_checked = analyzer.isHintChecked(mCurrentHintValidation);
 		if (is_checked)
 		{
 			mCurrentHintValidation = cv::Rect();
 			RETURN_SET_STATE(State::StartHunt);
 		}
-		tries++;
-		if (tries > 10)
+		click_tries++;
+		if (click_tries > 10)
 		{
 			RETURN_SET_STATE(State::ClickLastHint);
 		}
@@ -347,7 +350,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 	else if (previousState == State::WaitingToReachPhorreurPostion)
 	{
 		// Press on Z to display Phorreur
-		SendKeyPress(Z);
+		//SendKeyPress(Z);
 		mCurrentHintValidation = analyzer.getLastHintValidationPosition();
 		RETURN_SET_STATE(State::SearchPhorreur);
 	}
@@ -361,7 +364,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 			//Sleep(3);
 			RETURN_SET_STATE(previousState);
 		}
-		SendKeyRelease(Z);
+		//SendKeyRelease(Z);
 		mCurrentHintValidation = cv::Rect();
 		RETURN_SET_STATE(State::StartHunt);
 		//State phorreur_state = State::NoHunt;
@@ -403,7 +406,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 			RETURN_SET_STATE(State::WaitingToReachPhorreurPostion);
 		}
 
-		WriteTestData(c, analyzer);
+		WriteTestData(frame, analyzer);
 		DofusDB::DBInfos infos = { x, y, analyzer.getLastHintDirection(), 0,  hint };
 		mSocket->send(DofusDB::DBInfos2json(infos).c_str());
 		char* out;
@@ -419,44 +422,7 @@ void SimpleCapture::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& send
 		RETURN_SET_STATE(State::WaitingToReachHintPostion);
 	}
 }
-struct sEnumInfo
-{
-	int x_primaryscreen_diff = 0;
-	int y_primaryscreen_diff = 0;
-};
 
-//BOOL CALLBACK GetMonitorByIndex(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
-//{
-//
-//
-//	sEnumInfo* info = (sEnumInfo*)dwData;
-//	MONITORINFOEX monitorInfo;
-//	::ZeroMemory(&monitorInfo, sizeof(monitorInfo));
-//	monitorInfo.cbSize = sizeof(monitorInfo);
-//
-//	BOOL res = ::GetMonitorInfo(hMonitor, &monitorInfo);
-//	int left_x = monitorInfo.rcMonitor.left;
-//	int top_y = monitorInfo.rcMonitor.top;
-//
-//	if (info->x_primaryscreen_diff > left_x)
-//	{
-//		info->x_primaryscreen_diff = left_x;
-//	}
-//
-//	if (info->y_primaryscreen_diff > top_y)
-//	{
-//		info->y_primaryscreen_diff = top_y;
-//	}
-//	return TRUE;
-//}
-POINT SimpleCapture::processMonitors()
-{
-	sEnumInfo infos;
-
-	//EnumDisplayMonitors(NULL, NULL, GetMonitorByIndex, (LPARAM)&infos);
-	return { infos.x_primaryscreen_diff, infos.y_primaryscreen_diff };
-}
-#pragma optimize("", on) 
 inline SimpleCapture::EventRAII::EventRAII(SimpleCapture& sc) : mCapture(sc) {
 	sc.setProcessingFrame(true);
 }
@@ -473,5 +439,6 @@ inline SimpleCapture::EventRAII::~EventRAII() {
 		//cv::imshow("RAII", *mImage);
 		//cv::waitKey(0);
 	}
+	mCapture.mMutex.unlock();
 	mCapture.setProcessingFrame(false);
 }

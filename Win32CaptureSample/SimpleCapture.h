@@ -43,6 +43,7 @@ private:
     void OnFrameArrived(
         winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
         winrt::Windows::Foundation::IInspectable const& args);
+    void processFrame(cv::Mat frame);
     inline void CheckClosed()
     {
         if (m_closed.load() == true)
@@ -64,8 +65,7 @@ private:
     winrt::com_ptr<ID3D11Device> m_d3dDevice{ nullptr };
     winrt::com_ptr<ID3D11DeviceContext> m_d3dContext{ nullptr };
     winrt::Windows::Graphics::DirectX::DirectXPixelFormat m_pixelFormat;
-    POINT processMonitors();
-    POINT mTopLeftDiff;
+
     std::atomic<bool> m_closed = false;
     std::atomic < State > mState = State::NoHunt;
     std::atomic < std::pair<int, int>> mTargetPosition;
@@ -77,6 +77,7 @@ private:
     std::atomic<int> mCurrentStep = -1;
     winrt::Windows::Foundation::TimeSpan mT;
     std::shared_ptr<DofusHuntAnalyzer> mAnalyzer = nullptr;
+    std::mutex mMutex;
     friend class EventRAII;
     class EventRAII
     {
