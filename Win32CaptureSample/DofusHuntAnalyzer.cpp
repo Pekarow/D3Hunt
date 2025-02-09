@@ -559,6 +559,13 @@ void DofusHuntAnalyzer::findInterface()
 		}
 		Rect sub_rect(r.x, r.y, r.width, (int)(r.height * .1));
 		Mat sub(mImage, sub_rect);
+		Mat sub_test;
+		cv::cvtColor(sub, sub_test, cv::COLOR_BGR2GRAY);
+		cv::threshold(sub_test, sub_test, 230, 255, cv::THRESH_BINARY);
+		if (cv::countNonZero(sub_test) < 100)
+		{
+			continue;
+		}
 		std::string t1 = getPreciseTextFromImage(sub);
 		if(t1.find(TITLE_S) != std::string::npos)
 		{
