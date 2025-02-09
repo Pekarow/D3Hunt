@@ -21,6 +21,9 @@ namespace
 	const Scalar TITLE_UPPER = Scalar(180, 255, 190);
 	const Scalar HINT_LOWER = Scalar(106, 0, 0);
 	const Scalar HINT_UPPER = Scalar(180, 255, 71);
+	const Scalar VALIDATE_LOWER = Scalar(34, 145, 109);
+	const Scalar VALIDATE_UPPER = Scalar(40, 255, 186);
+
 	const string TITLE_S = "CHASSE AUX TRESORS";
 
 	const double X_DIRECTION_RATIO = .1;
@@ -366,13 +369,18 @@ Rect DofusHuntAnalyzer::getLastHintValidationPosition()
 	return mLastHintValidationPosition;
 }
 
-std::pair<int, int> DofusHuntAnalyzer::getStepValidationPosition()
+Rect DofusHuntAnalyzer::getStepValidationPosition()
 {
 	if (!mHuntInfosFound)
 	{
 		initHuntInfos();
 	}
-	return std::pair<int, int>();
+	return mValidateRect;
+}
+
+bool DofusHuntAnalyzer::canValidate()
+{
+	return !mValidateRect.empty();
 }
 
 bool DofusHuntAnalyzer::isPhorreurFound()
@@ -542,6 +550,12 @@ void DofusHuntAnalyzer::initHuntInfos()
 			break;
 		}
 
+	}
+
+	vector<Rect> validate_rects = FindRectInImage(_interface, VALIDATE_LOWER, VALIDATE_UPPER, "VALIDER", mInterfaceRect.width - 10);
+	if(validate_rects.size() > 0)
+	{
+		mValidateRect = validate_rects[0];
 	}
 	mHuntInfosFound = true;
 }
@@ -782,7 +796,7 @@ vector<Rect> DofusHuntAnalyzer::FindRectInImage(Mat& image, Scalar lower_bound, 
 
 bool DofusHuntAnalyzer::containsText(Mat& image, string text)
 {
-	std::string t1 = getTextFromImage(image, mTesseractAPI);
+	std::string t1 = getPreciseTextFromImage(image);
 	return t1.find(text) != std::string::npos;
 }
 

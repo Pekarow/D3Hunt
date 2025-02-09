@@ -13,6 +13,7 @@ enum class State
     ClickLastHint,
     LastHintClicked,
     ClickStep,
+    StepClicked,
     ClickFight,
     Fight,
     Ended

@@ -27,7 +27,8 @@ public:
 	int getMaxHuntStep();
 	bool isStepFinished();
 	cv::Rect getLastHintValidationPosition();
-	std::pair<int, int> getStepValidationPosition();
+	cv::Rect getStepValidationPosition();
+	bool canValidate();
 	bool isPhorreurFound();
 	cv::Mat* getDebugImage() { return &mImageDebug; };
 	void resetTesseractAPI(tesseract::PageSegMode mode, const std::string& whitelist);
@@ -74,6 +75,7 @@ private:
 	bool mHuntInfosFound = false;
 	bool mHuntAreaFound=false;
 	cv::Rect mInterfaceRect;
+	cv::Rect mValidateRect;
 	int mLastHintDirection = -1;
 	int mLastHintIndex = -1;
 	int mNbHint = -1;

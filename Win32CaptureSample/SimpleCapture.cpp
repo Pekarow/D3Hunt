@@ -34,6 +34,15 @@ namespace util
 
 namespace
 {
+	RECT toRECT(cv::Rect r)
+	{
+		RECT R;
+		R.left = r.x;
+		R.right = r.x + r.width;
+		R.top = r.y;
+		R.bottom = r.y + r.height;
+		return R;
+	}
 	static tesseract::TessBaseAPI* gTesseractAPI = nullptr;
 	std::string getCurrentTimestamp() {
 		// Get the current time
@@ -281,33 +290,35 @@ void SimpleCapture::processFrame(cv::Mat frame)
 		Close();
 	}
 
-	if (analyzer.isStepFinished() && previousState != State::ClickStep)
-	{
-		RETURN_SET_STATE(State::ClickStep);
-	}
-	if (previousState == State::ClickStep)
+	if (analyzer.isStepFinished() || previousState == State::ClickStep)
 	{
 		if (mCurrentStep == -1)
 		{
 			mCurrentStep = analyzer.getHuntStep();
 		}
-
-		if (mCurrentStep + 1 != analyzer.getHuntStep())
+		SendClick(toRECT(analyzer.getStepValidationPosition()), mHWND);
+		click_tries = 0;
+		RETURN_SET_STATE(State::StepClicked);
+	}
+	else if (previousState == State::StepClicked)
+	{
+		if (mCurrentStep + 1 == analyzer.getHuntStep())
 		{
-			RETURN_SET_STATE(previousState);
+			mCurrentStep = -1;
+			RETURN_SET_STATE(State::StartHunt);
 		}
-		mCurrentStep = -1;
-		RETURN_SET_STATE(State::StartHunt);
+
+
+		click_tries++;
+		if (click_tries > 10)
+		{
+			RETURN_SET_STATE(State::ClickStep);
+		}
+		RETURN_SET_STATE(previousState);
 	}
 	else if (previousState == State::ClickLastHint)
 	{
-		RECT r;
-		cv::Rect curr = mCurrentHintValidation.load();
-		r.left = curr.x;
-		r.right = curr.x + curr.width;
-		r.top = curr.y;
-		r.bottom = curr.y + curr.height;
-		SendClick(r, mHWND);
+		SendClick(toRECT(mCurrentHintValidation), mHWND);
 		click_tries = 0;
 		RETURN_SET_STATE(State::LastHintClicked);
 	}
