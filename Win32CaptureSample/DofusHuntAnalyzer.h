@@ -32,7 +32,7 @@ public:
 	bool isPhorreurFound();
 	cv::Mat* getDebugImage() { return &mImageDebug; };
 	void resetTesseractAPI(tesseract::PageSegMode mode, const std::string& whitelist);
-	std::string getPreciseTextFromImage(cv::Mat& image);
+	std::string getPreciseTextFromImage(cv::Mat& image, bool block = false);
 	std::string toString() const;
 	static DofusHuntAnalyzer fromString(const std::string& str);
 

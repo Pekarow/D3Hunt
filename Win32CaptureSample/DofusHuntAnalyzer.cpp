@@ -28,7 +28,7 @@ namespace
 
 	const double X_DIRECTION_RATIO = .1;
 	const double X_INPROGRESS_RATIO = .25;
-	const string TESSERACT_FILTER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-";
+	const string TESSERACT_FILTER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgijklmnopqrstuvwxyz Ééèêçà'ô[]()?/,-%";
 	
 	// trim from start (in place)
 	inline void ltrim(std::string& s) {
@@ -398,7 +398,7 @@ inline void DofusHuntAnalyzer::resetTesseractAPI(tesseract::PageSegMode mode, co
 	mTesseractAPI->SetVariable("tessedit_char_whitelist", whitelist.c_str());
 }
 
-inline string DofusHuntAnalyzer::getPreciseTextFromImage(Mat& image)
+inline string DofusHuntAnalyzer::getPreciseTextFromImage(Mat& image, bool block)
 {
 	Mat rgb;
 	cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
@@ -407,7 +407,14 @@ inline string DofusHuntAnalyzer::getPreciseTextFromImage(Mat& image)
 	mTesseractAPI->SetImage(rgb.data, rgb.cols, rgb.rows, 3, (int)rgb.step);
 
 	string res = mTesseractAPI->GetUTF8Text();
-	resetTesseractAPI(tesseract::PSM_SPARSE_TEXT, TESSERACT_FILTER);
+	if (block)
+	{
+		resetTesseractAPI(tesseract::PSM_SINGLE_BLOCK, TESSERACT_FILTER);
+	}
+	else
+	{
+		resetTesseractAPI(tesseract::PSM_SPARSE_TEXT, TESSERACT_FILTER);
+	}
 	if (res == "?")
 	{
 		return res;
@@ -416,7 +423,7 @@ inline string DofusHuntAnalyzer::getPreciseTextFromImage(Mat& image)
 	mTesseractAPI->SetImage(rgb.data, rgb.cols, rgb.rows, 3, (int)rgb.step);
 
 	res = mTesseractAPI->GetUTF8Text();
-
+	resetTesseractAPI(tesseract::PSM_SPARSE_TEXT, TESSERACT_FILTER);
 
 	return res;
 }
@@ -551,13 +558,17 @@ void DofusHuntAnalyzer::initHuntInfos()
 		}
 
 	}
-
-	vector<Rect> validate_rects = FindRectInImage(_interface, VALIDATE_LOWER, VALIDATE_UPPER, "VALIDER", mInterfaceRect.width - 10);
+	mHuntInfosFound = true;
+	if (!isStepFinished())
+		return;
+	vector<Rect> validate_rects = FindRectInImage(_interface, VALIDATE_LOWER, VALIDATE_UPPER, "VALIDER");
 	if(validate_rects.size() > 0)
 	{
 		mValidateRect = validate_rects[0];
+		mValidateRect.x += mInterfaceRect.x;
+		mValidateRect.y += mInterfaceRect.y;
 	}
-	mHuntInfosFound = true;
+	
 }
 
 void DofusHuntAnalyzer::findInterface()
@@ -701,31 +712,44 @@ void DofusHuntAnalyzer::findCurrentPos()
 	cv::cvtColor(sub_mat, sub_hsv, cv::ColorConversionCodes::COLOR_BGR2HSV);
 
 	cv::Mat sub_mask;
-	cv::inRange(sub_hsv, Scalar(0,0,0), Scalar(179, 125, 255), sub_mask);
+	cv::inRange(sub_hsv, Scalar(0,0,0), Scalar(179, 20, 255), sub_mask);
 
 	cv::Mat sub_res;
 	cv::bitwise_and(sub_mat, sub_mat, sub_res, mask = sub_mask);
 	string whiteList = "0123456789 -,";
-	//mTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
+	mTesseractAPI->SetVariable("tessedit_char_whitelist", whiteList.c_str());
 	string top_left_s = getPreciseTextFromImage(sub_res);
-	std::string target = "\nO";
-	std::string replacement = "\n0";
-	size_t pos = top_left_s.find(target);
 
-	// Check if the target substring is found
+	std::string target = "O";
+	std::string replacement = "0";
+	size_t pos = top_left_s.find(target);
 	if (pos != std::string::npos) {
 		top_left_s.replace(pos, target.length(), replacement);
 	}
-	const std::regex re("([-]?[0-9]{1,2})");
+
+	// Check if the target substring is found
+	const std::regex re("^([-]?[0-9Oo]{1,2}).[, ]{1,5}([-]?[0-9Oo]{1,2})");
 	std::smatch match_result;
 
 	string::const_iterator searchStart(top_left_s.cbegin());
 
 	std::regex_search(searchStart, top_left_s.cend(), match_result, re);
-	int x_pos = std::stoi(match_result[0]);
-	searchStart = match_result.suffix().first;
-	std::regex_search(searchStart, top_left_s.cend(), match_result, re);
-	int y_pos = std::stoi(match_result[0]);
+	if (match_result.empty())
+	{
+		top_left_s = getPreciseTextFromImage(sub_res, true);
+		std::string target = "O";
+		std::string replacement = "0";
+		size_t pos = top_left_s.find(target);
+		if (pos != std::string::npos) {
+			top_left_s.replace(pos, target.length(), replacement);
+		}
+		searchStart = string::const_iterator(top_left_s.cbegin());
+		std::regex_search(searchStart, top_left_s.cend(), match_result, re);
+	}
+
+	
+	int x_pos = std::stoi(match_result[1]);
+	int y_pos = std::stoi(match_result[2]);
 
 	//mTesseractAPI->SetVariable("tessedit_char_whitelist", "");
 	//cv::rectangle(mImageDebug, sub_rect, Scalar(100, 100, 255), 1);

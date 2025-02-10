@@ -54,8 +54,8 @@ void SendClick(RECT rect, HWND hwnd)
 	MONITORINFO mi;
 	mi.cbSize = sizeof(mi);
 	GetMonitorInfo(monitor, &mi);
-	UINT diff_X = /*mi.rcMonitor.left*/0;
-	UINT diff_Y = /*mi.rcMonitor.top*/0;
+	UINT monitor_x = mi.rcMonitor.left;
+	UINT monitor_y = mi.rcMonitor.top;
 
 	UINT dpi_x, dpi_y;
 	GetDpiForMonitor(monitor, MDT_DEFAULT, &dpi_x, &dpi_y);
@@ -71,8 +71,8 @@ void SendClick(RECT rect, HWND hwnd)
 	double const height_scale{ static_cast<double>(virtual_screen_height) / max_coordinate };
 
 	/* Convert x and y to the MOUSEINPUT domain of 0-65535. */
-	LONG domain_x{ static_cast<LONG>(static_cast<double>(x) / width_scale) };
-	LONG domain_y{ static_cast<LONG>(static_cast<double>(y) / height_scale) };
+	LONG domain_x{ static_cast<LONG>(static_cast<double>(x + monitor_x) / width_scale) };
+	LONG domain_y{ static_cast<LONG>(static_cast<double>(y + monitor_y) / height_scale) };
 
 
 	constexpr DWORD time{ 0 };

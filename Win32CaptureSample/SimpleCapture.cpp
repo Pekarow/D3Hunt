@@ -261,9 +261,8 @@ void SimpleCapture::processFrame(cv::Mat frame)
 	{
 		return;
 	}
-	if (mProcessingFrame)
-		return;
 	EventRAII ev(*this);
+	
 	State previousState = mState;
 	std::shared_ptr<DofusHuntAnalyzer> analyzer_ptr(new DofusHuntAnalyzer(frame, gTesseractAPI));
 	DofusHuntAnalyzer& analyzer = *analyzer_ptr;
@@ -290,7 +289,7 @@ void SimpleCapture::processFrame(cv::Mat frame)
 		Close();
 	}
 
-	if (analyzer.isStepFinished() || previousState == State::ClickStep)
+	if ((analyzer.isStepFinished() && previousState != State::StepClicked) || previousState == State::ClickStep)
 	{
 		if (mCurrentStep == -1)
 		{
@@ -417,7 +416,7 @@ void SimpleCapture::processFrame(cv::Mat frame)
 			RETURN_SET_STATE(State::WaitingToReachPhorreurPostion);
 		}
 
-		WriteTestData(frame, analyzer);
+		//WriteTestData(frame, analyzer);
 		DofusDB::DBInfos infos = { x, y, analyzer.getLastHintDirection(), 0,  hint };
 		mSocket->send(DofusDB::DBInfos2json(infos).c_str());
 		char* out;
