@@ -31,7 +31,7 @@ class DofusDB:
         chrome_options.add_argument("--start-maximized")
         if headless:
             chrome_options.add_argument("--headless=new")
-        self.driver = uc.Chrome(options=chrome_options, use_subprocess=False)
+        self.driver = uc.Chrome(options=chrome_options, use_subprocess=False, no_sandbox=False)
         self.driver.delete_all_cookies()
         self.driver.get("https://dofusdb.fr/fr/tools/treasure-hunt")
     def set_x_position(self, pos: int) -> None:
@@ -101,6 +101,8 @@ class DofusDB:
         actions.send_keys(Keys.DOWN)
         actions.perform()
         self.set_hint(hint)
+    def quit(self):
+        self.driver.quit()
     # def run(self, data):
     #     run(data['x'], )
         
@@ -108,6 +110,7 @@ if __name__ == "__main__":
     db = DofusDB(False)
     a = {'x': -12, 'y': -23, 'direction': 2, 'exit': 0, 'hint': 'Tr  re  rayures '}
     a = {'x': -58, 'y': -52, 'direction': 3, 'exit': 0, 'hint': 'Tissu  carreaux noue '}
+    a= {'x': -6, 'y': -14, 'direction': 1, 'exit': 0, 'hint': 'Ornement flocon '}
     db.run(**a)
     sleep(1)
     x, y = db.get_hint_position()

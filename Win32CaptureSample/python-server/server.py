@@ -1,7 +1,6 @@
 import socket
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from DofusDB import DofusDB
-import select
 import json
 from time import sleep
 
@@ -16,8 +15,7 @@ def handle_client(conn, address):
             break
 
         if not data:
-            sleep(1)
-            continue
+            break
 
         res = json.loads(data)
         print(res)
@@ -38,6 +36,8 @@ def handle_client(conn, address):
         conn.send(new_data.encode())  # Send data to the client
 
     conn.close()  # Close the connection
+    ddb.quit()
+    print(f"closed connection: {address}")
 
 def server_program():
     host = socket.gethostname()
